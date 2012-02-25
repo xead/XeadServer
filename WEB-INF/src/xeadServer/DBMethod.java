@@ -182,6 +182,7 @@ public class DBMethod extends HttpServlet {
 				if (conn == null) {
 					throw new Exception("DB-connection is not available now.");
 				} else {
+					conn.setReadOnly(true);
 					stmt = conn.createStatement();
 					rset = stmt.executeQuery(method);
 					relation = new Relation(rset);
@@ -216,6 +217,7 @@ public class DBMethod extends HttpServlet {
 				if (conn == null) {
 					throw new Exception("DB-connection is not available now.");
 				} else {
+					conn.setReadOnly(false);
 					stmt = conn.createStatement();
 					count = stmt.executeUpdate(method);
 				}
