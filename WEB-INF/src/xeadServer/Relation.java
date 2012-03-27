@@ -114,7 +114,7 @@ public class Relation implements Serializable {
 		}
 	}
 
-	public Object getValueOf(String fieldID) {
+	public Object getValueOf(String fieldID) throws Exception {
 		Object value = null;
 		if (fieldValueList.size() > 0
 				&& currentRowIndex >= 0
@@ -122,7 +122,9 @@ public class Relation implements Serializable {
 			ArrayList<Object> valueList = fieldValueList.get(currentRowIndex);
 			int fieldIndex = fieldIDList.indexOf(fieldID);
 			if (fieldIndex == -1) {
-				JOptionPane.showMessageDialog(null, "Field not contained in the result set is required.\n" + tableID_ + ", " + fieldID);
+				String message = "Field not contained in the result set is required.\n" + tableID_ + ", " + fieldID;
+				JOptionPane.showMessageDialog(null, message);
+				throw new Exception(message);
 			} else {
 				value = valueList.get(fieldIndex);
 			}
