@@ -40,6 +40,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.StringTokenizer;
 import javax.naming.Context;
 import javax.naming.InitialContext;
@@ -50,55 +51,125 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.ServletException;
 
 public class DBMethod extends HttpServlet {
-	/**
-	 * Static constants
-	 */
 	private static final long serialVersionUID = 1L;
-	public static final String APPLICATION_NAME  = "XEAD Server 1.0";
-	public static final String FULL_VERSION  = "V1.R0.M0";
-	public static final String FORMAT_VERSION  = "1.0";
+	/**
+	 * Application Information
+	 */
+	public static final String APPLICATION_NAME  = "XEAD Server 1.1";
+	public static final String FULL_VERSION  = "V1.R1.M1";
 	public static final String PRODUCT_NAME = "XEAD[zi:d] Server";
 	public static final String COPYRIGHT = "Copyright 2012 DBC,Ltd.";
 	public static final String URL_DBC = "http://homepage2.nifty.com/dbc/";
 	/**
 	 * Private variants
 	 */
-	protected ArrayList<String> databaseIDList = new ArrayList<String>();
-	protected ArrayList<DataSource> dataSourceList = new ArrayList<DataSource>();
-	protected static final String jndiName = "java:comp/env/jdbc/XeadServerDs";
-	protected HashMap<String, Connection> manualCommitConnectionMap = new HashMap<String, Connection>();
+	private static final String JNDI_PREFIX = "java:comp/env/jdbc/";
+	private ArrayList<String> databaseIDList = new ArrayList<String>();
+	private ArrayList<DataSource> dataSourceList = new ArrayList<DataSource>();
+	private HashMap<String, Connection> manualCommitConnectionMap = new HashMap<String, Connection>();
 
 	public void init() throws ServletException {
+		String datasource, subDBIDs, id;
+
 		super.init();
+
 		try {
+			///////////////////////////
+			// Setup Initial Context //
+			///////////////////////////
 			Context initialContext = new InitialContext();
 
-			////////////////////////////////
-			// Get dataSource for Main-DB //
-			////////////////////////////////
+			/////////////////////////////////////////
+			// Get parameter value of "DataSource" //
+			/////////////////////////////////////////
+			datasource = getServletConfig().getInitParameter("DataSource");
+			
+			/////////////////////////////////////////////////
+			// Get dataSource for Main-DB(its id is blank) //
+			/////////////////////////////////////////////////
 			databaseIDList.add("");
-			dataSourceList.add((DataSource)initialContext.lookup(jndiName));
+			dataSourceList.add((DataSource)initialContext.lookup(JNDI_PREFIX + datasource));
 
-			///////////////////////////////
-			// Get dataSource for Sub-DB //
-			///////////////////////////////
-			String wrkStr = getServletConfig().getInitParameter("SubDB");
-			if (wrkStr != null && !wrkStr.equals("")) {
-				StringTokenizer tokenizer = new StringTokenizer(wrkStr, ",");
+			//////////////////////////////////////////////
+			// Get dataSource for Sub-DBs with their id //
+			//////////////////////////////////////////////
+			subDBIDs = getServletConfig().getInitParameter("SubDB");
+			if (subDBIDs != null && !subDBIDs.equals("")) {
+				StringTokenizer tokenizer = new StringTokenizer(subDBIDs, ",");
 				while (tokenizer.hasMoreTokens()) {
-					wrkStr = tokenizer.nextToken();
-					databaseIDList.add(wrkStr);
-					dataSourceList.add((DataSource)initialContext.lookup(jndiName + wrkStr));
+					id = tokenizer.nextToken();
+					databaseIDList.add(id);
+					dataSourceList.add((DataSource)initialContext.lookup(JNDI_PREFIX + datasource + id));
 				}
 			}
 
+			///////////////////////////
+			// Close Initial Context //
+			///////////////////////////
 			initialContext.close();
+
 		} catch (NamingException e) {
 			e.printStackTrace();
 		}
 	}
 	
 	protected void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
+		try {
+			Connection con;
+			String sessionID = "";
+			StringBuffer sb = new StringBuffer();
+			sb.append("<html>");
+			sb.append("<head>");
+			sb.append("<title>XEAD Server Status</title>");
+			sb.append("</head>");
+			sb.append("<body>");
+			sb.append("<h3>XEAD Server Status</h3>");
+			sb.append("<table border='2' cellpadding='2'>");
+			sb.append("<caption>Database Connections</caption>");
+			sb.append("<tr style='background:#ccccff'><th>DB ID</th><th>Session ID</th><th>Connection</th></tr>");
+			for (int i = 0; i < databaseIDList.size(); i++) {
+				if (databaseIDList.get(i).equals("")) {
+					try {
+						con = dataSourceList.get(i).getConnection();
+						if (con != null && con.isValid(0)) {
+							sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>VALID</td></tr>");
+						} else {
+							sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>INVALID</td></tr>");
+						}
+					} catch (Exception e) {
+						sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>INVALID</td></tr>");
+					}
+					for (Iterator<String> it = manualCommitConnectionMap.keySet().iterator(); it.hasNext(); ) {
+						sessionID = it.next();
+						con = manualCommitConnectionMap.get(sessionID);
+						if (con != null && con.isValid(0)) {
+							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>VALID</td></tr>");
+						} else {
+							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>INVALID</td></tr>");
+						}
+					}
+				} else {
+					try {
+						con = dataSourceList.get(i).getConnection();
+						if (con != null && con.isValid(0)) {
+							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>VALID</td></tr>");
+						} else {
+							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>INVALID</td></tr>");
+						}
+					} catch (Exception e) {
+						sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>INVALID</td></tr>");
+					}
+				}
+			}
+			sb.append("</table>");
+			sb.append("</body>");
+			sb.append("</html>");
+			PrintWriter out = res.getWriter();
+			out.print(new String(sb));
+			out.close();
+		} catch (Exception e) {	
+			res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+		}
 	}
 
 	protected void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
