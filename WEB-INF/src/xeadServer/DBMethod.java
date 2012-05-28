@@ -52,22 +52,19 @@ import javax.servlet.ServletException;
 
 public class DBMethod extends HttpServlet {
 	private static final long serialVersionUID = 1L;
-	/**
-	 * Application Information
-	 */
 	public static final String APPLICATION_NAME  = "XEAD Server 1.1";
-	public static final String FULL_VERSION  = "V1.R1.M1";
+	public static final String FULL_VERSION  = "V1.R1.M2";
 	public static final String PRODUCT_NAME = "XEAD[zi:d] Server";
 	public static final String COPYRIGHT = "Copyright 2012 DBC,Ltd.";
 	public static final String URL_DBC = "http://homepage2.nifty.com/dbc/";
-	/**
-	 * Private variants
-	 */
 	private static final String JNDI_PREFIX = "java:comp/env/jdbc/";
 	private ArrayList<String> databaseIDList = new ArrayList<String>();
 	private ArrayList<DataSource> dataSourceList = new ArrayList<DataSource>();
 	private HashMap<String, Connection> manualCommitConnectionMap = new HashMap<String, Connection>();
 
+    //////////////////
+	// Initializing //
+	//////////////////
 	public void init() throws ServletException {
 		String datasource, subDBIDs, id;
 
@@ -113,28 +110,32 @@ public class DBMethod extends HttpServlet {
 		}
 	}
 	
+	///////////////////////////////////////////////////////
+	// Processing "Get" requests to return the test page //
+	///////////////////////////////////////////////////////
 	protected void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
 		try {
 			Connection con;
 			String sessionID = "";
+			res.setContentType("text/html; charset=UTF-8");
 			StringBuffer sb = new StringBuffer();
 			sb.append("<html>");
 			sb.append("<head>");
 			sb.append("<title>XEAD Server Status</title>");
 			sb.append("</head>");
 			sb.append("<body>");
-			sb.append("<h3>XEAD Server Status</h3>");
+			sb.append("<h3>XEAD Server Database Connections</h3>");
 			sb.append("<table border='2' cellpadding='2'>");
-			sb.append("<caption>Database Connections</caption>");
 			sb.append("<tr style='background:#ccccff'><th>DB ID</th><th>Session ID</th><th>Connection</th></tr>");
 			for (int i = 0; i < databaseIDList.size(); i++) {
 				if (databaseIDList.get(i).equals("")) {
 					try {
 						con = dataSourceList.get(i).getConnection();
-						if (con != null && con.isValid(0)) {
-							sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>VALID</td></tr>");
-						} else {
+						if (con == null) {
 							sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>INVALID</td></tr>");
+						} else {
+							//if (con.isValid(0)) {
+							sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>VALID</td></tr>");
 						}
 					} catch (Exception e) {
 						sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>INVALID</td></tr>");
@@ -142,19 +143,19 @@ public class DBMethod extends HttpServlet {
 					for (Iterator<String> it = manualCommitConnectionMap.keySet().iterator(); it.hasNext(); ) {
 						sessionID = it.next();
 						con = manualCommitConnectionMap.get(sessionID);
-						if (con != null && con.isValid(0)) {
-							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>VALID</td></tr>");
-						} else {
+						if (con == null) {
 							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>INVALID</td></tr>");
+						} else {
+							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>VALID</td></tr>");
 						}
 					}
 				} else {
 					try {
 						con = dataSourceList.get(i).getConnection();
-						if (con != null && con.isValid(0)) {
-							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>VALID</td></tr>");
-						} else {
+						if (con == null) {
 							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>INVALID</td></tr>");
+						} else {
+							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>VALID</td></tr>");
 						}
 					} catch (Exception e) {
 						sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>INVALID</td></tr>");
@@ -172,6 +173,9 @@ public class DBMethod extends HttpServlet {
 		}
 	}
 
+	/////////////////////////////////////////////////////////////////
+	// Processing "Post" requests to return serialized result sets //
+	/////////////////////////////////////////////////////////////////
 	protected void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
 		String parmSessionID = "";
 		String parmMethod = "";
