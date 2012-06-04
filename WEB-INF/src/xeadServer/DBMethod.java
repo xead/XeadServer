@@ -53,7 +53,7 @@ import javax.servlet.ServletException;
 public class DBMethod extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 	public static final String APPLICATION_NAME  = "XEAD Server 1.1";
-	public static final String FULL_VERSION  = "V1.R1.M2";
+	public static final String FULL_VERSION  = "V1.R1.M3";
 	public static final String PRODUCT_NAME = "XEAD[zi:d] Server";
 	public static final String COPYRIGHT = "Copyright 2012 DBC,Ltd.";
 	public static final String URL_DBC = "http://homepage2.nifty.com/dbc/";
@@ -217,27 +217,32 @@ public class DBMethod extends HttpServlet {
 			if (parmMethod.toUpperCase().equals("COMMIT")) {
 				closeConnectionForSession(parmSessionID, parmMethod);
 				PrintWriter out = res.getWriter();
-				out.println("The transaction was commited.");
+				out.print("The transaction was commited.");
 				out.close();
 			}
 			if (parmMethod.toUpperCase().equals("ROLLBACK")) {
 				closeConnectionForSession(parmSessionID, parmMethod);
 				PrintWriter out = res.getWriter();
-				out.println("The transaction was rollbacked.");
+				out.print("The transaction was rollbacked.");
 				out.close();
 			}
 			if (parmMethod.toUpperCase().startsWith("CALL ")) {
 				callProcedure(parmSessionID, parmMethod, parmDBID);
 				PrintWriter out = res.getWriter();
-				out.println("The procedure was executed.");
+				out.print("The procedure was executed.");
 				out.close();
 			}
-			if (parmMethod.toUpperCase().equals("STATUS")) {
-				StringBuffer buf = new StringBuffer();
-				buf.append("Session ID of Manual-Commit connection:\n");
-				buf.append(manualCommitConnectionMap.keySet());
+//			if (parmMethod.toUpperCase().equals("STATUS")) {
+//				StringBuffer buf = new StringBuffer();
+//				buf.append("Session ID of Manual-Commit connection:\n");
+//				buf.append(manualCommitConnectionMap.keySet());
+//				PrintWriter out = res.getWriter();
+//				out.println(buf.toString());
+//				out.close();
+//			}
+			if (parmMethod.toUpperCase().equals("IP")) {
 				PrintWriter out = res.getWriter();
-				out.println(buf.toString());
+				out.print(req.getRemoteAddr());
 				out.close();
 			}
 		} catch (Exception e) {	
