@@ -1,7 +1,7 @@
 package xeadServer;
 
 /*
- * Copyright (c) 2012 WATANABE kozo <qyf05466@nifty.com>,
+ * Copyright (c) 2014 WATANABE kozo <qyf05466@nifty.com>,
  * All rights reserved.
  *
  * This file is part of XEAD Server.
@@ -31,6 +31,9 @@ package xeadServer;
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
@@ -42,72 +45,216 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.StringTokenizer;
-import javax.naming.Context;
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.ServletException;
+import org.apache.commons.dbcp.BasicDataSource;
+import org.apache.xerces.parsers.DOMParser;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
 public class DBMethod extends HttpServlet {
 	private static final long serialVersionUID = 1L;
-	public static final String APPLICATION_NAME  = "XEAD Server 1.1";
-	public static final String FULL_VERSION  = "V1.R1.M3";
-	public static final String PRODUCT_NAME = "XEAD[zi:d] Server";
-	public static final String COPYRIGHT = "Copyright 2012 DBC,Ltd.";
-	public static final String URL_DBC = "http://homepage2.nifty.com/dbc/";
-	private static final String JNDI_PREFIX = "java:comp/env/jdbc/";
-	private ArrayList<String> databaseIDList = new ArrayList<String>();
-	private ArrayList<DataSource> dataSourceList = new ArrayList<DataSource>();
-	private HashMap<String, Connection> manualCommitConnectionMap = new HashMap<String, Connection>();
 
+	/////////////////////////////
+	// APPLICATION INFORMATION //
+	/////////////////////////////
+	public static final String APPLICATION_NAME  = "XEAD Server/ DB Method Controler";
+	public static final String VERSION  = "V1.R0.M1";
+
+	///////////////////////////
+	// DB DRIVER CLASS NAMES //
+	///////////////////////////
+	private static final String DRIVER_DERBY = "org.apache.derby.jdbc.ClientDriver";
+	private static final String DRIVER_MYSQL = "com.mysql.jdbc.Driver";
+	private static final String DRIVER_POSTGRESQL = "org.postgresql.Driver";
+	private static final String DRIVER_ORACLE = "oracle.jdbc.driver.OracleDriver";
+
+	/////////////////////
+	// GLOBAL VARIANTS //
+	/////////////////////
+	private ArrayList<String> databaseIDList = new ArrayList<String>();
+	private ArrayList<String> lastCommandList = new ArrayList<String>();
+	private ArrayList<DataSource> dataSourceList = new ArrayList<DataSource>();
+	private HashMap<String, Connection> manualCommitConnectionMapBySession = new HashMap<String, Connection>();
+	private HashMap<String, String> manualCommitLastCommandMapBySession = new HashMap<String, String>();
+	
     //////////////////
 	// Initializing //
 	//////////////////
 	public void init() throws ServletException {
-		String datasource, subDBIDs, id;
-
+		String currentFolder = "";
+		org.w3c.dom.Document domDocument = null;
+		BasicDataSource dataSource;
+		HashMap<String, Object> dbOptionMap;
 		super.init();
 
+		////////////////////////////////////////////////////////////
+		// Get parameter value of "SystemDefinition" to parse DOM //
+		////////////////////////////////////////////////////////////
+		String fileName = getServletConfig().getInitParameter("SystemDefinition");
 		try {
-			///////////////////////////
-			// Setup Initial Context //
-			///////////////////////////
-			Context initialContext = new InitialContext();
-
-			/////////////////////////////////////////
-			// Get parameter value of "DataSource" //
-			/////////////////////////////////////////
-			datasource = getServletConfig().getInitParameter("DataSource");
-			
-			/////////////////////////////////////////////////
-			// Get dataSource for Main-DB(its id is blank) //
-			/////////////////////////////////////////////////
-			databaseIDList.add("");
-			dataSourceList.add((DataSource)initialContext.lookup(JNDI_PREFIX + datasource));
-
-			//////////////////////////////////////////////
-			// Get dataSource for Sub-DBs with their id //
-			//////////////////////////////////////////////
-			subDBIDs = getServletConfig().getInitParameter("SubDB");
-			if (subDBIDs != null && !subDBIDs.equals("")) {
-				StringTokenizer tokenizer = new StringTokenizer(subDBIDs, ",");
-				while (tokenizer.hasMoreTokens()) {
-					id = tokenizer.nextToken();
-					databaseIDList.add(id);
-					dataSourceList.add((DataSource)initialContext.lookup(JNDI_PREFIX + datasource + id));
-				}
+			File xeafFile = new File(fileName);
+			if (xeafFile.exists()) {
+				currentFolder = xeafFile.getParent();
+				DOMParser parser = new DOMParser();
+				parser.parse(new InputSource(new FileInputStream(fileName)));
+				domDocument = parser.getDocument();
 			}
-
-			///////////////////////////
-			// Close Initial Context //
-			///////////////////////////
-			initialContext.close();
-
-		} catch (NamingException e) {
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (SAXException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		NodeList nodeList = domDocument.getElementsByTagName("System");
+		org.w3c.dom.Element systemElement = (org.w3c.dom.Element)nodeList.item(0);
+
+		///////////////////////////////////////
+		// Setup Connection Pool for Main-DB //
+		///////////////////////////////////////
+		dbOptionMap = getMainDbOptionMap(systemElement, currentFolder);
+		databaseIDList.add((String)dbOptionMap.get("ID"));
+		dataSource = new BasicDataSource();
+		dataSource.setDriverClassName((String)dbOptionMap.get("DriverClassName"));
+		dataSource.setUsername((String)dbOptionMap.get("UserName"));
+		dataSource.setPassword((String)dbOptionMap.get("Password"));
+		dataSource.setUrl((String)dbOptionMap.get("Url"));
+		dataSource.setMaxActive((Integer)dbOptionMap.get("MaxActive"));
+		dataSource.setMaxIdle((Integer)dbOptionMap.get("MaxIdle"));
+		dataSource.setMinIdle((Integer)dbOptionMap.get("MinIdle"));
+		dataSource.setDefaultAutoCommit(false);
+		dataSource.setDefaultReadOnly(false);
+		dataSource.setDefaultTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+		dataSourceList.add(dataSource);
+		lastCommandList.add("");
+
+		///////////////////////////////////////
+		// Setup Connection Pool for Sub-DBs //
+		///////////////////////////////////////
+		NodeList subDBList = domDocument.getElementsByTagName("SubDB");
+		for (int i = 0; i < subDBList.getLength(); i++) {
+			dbOptionMap = getSubDbOptionMap((org.w3c.dom.Element)subDBList.item(i), currentFolder);
+			databaseIDList.add((String)dbOptionMap.get("ID"));
+			dataSource = new BasicDataSource();
+			dataSource.setDriverClassName((String)dbOptionMap.get("DriverClassName"));
+			dataSource.setUsername((String)dbOptionMap.get("UserName"));
+			dataSource.setPassword((String)dbOptionMap.get("Password"));
+			dataSource.setUrl((String)dbOptionMap.get("Url"));
+			dataSource.setMaxActive((Integer)dbOptionMap.get("MaxActive"));
+			dataSource.setMaxIdle((Integer)dbOptionMap.get("MaxIdle"));
+			dataSource.setMinIdle((Integer)dbOptionMap.get("MinIdle"));
+			dataSource.setDefaultAutoCommit(true);
+			dataSource.setDefaultReadOnly(true);
+			dataSource.setDefaultTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+			dataSourceList.add(dataSource);
+			lastCommandList.add("");
+		}
+	}
+
+    ///////////////////////////////
+	// Get DB Options of Main-DB //
+	///////////////////////////////
+	private HashMap<String, Object> getMainDbOptionMap(org.w3c.dom.Element element, String currentFolder) {
+		String options, option, key, value;
+		StringTokenizer tokenizer1, tokenizer2;
+
+		HashMap<String, Object> map = new HashMap<String, Object>(); 
+		map.put("MaxActive", 10); //DEFAULT//
+		map.put("MaxIdle", 10); //DEFAULT//
+		map.put("MinIdle", 5); //DEFAULT//
+		
+		map.put("ID", "");
+		String dbName = element.getAttribute("DatabaseName");
+		dbName = dbName.replace("<CURRENT>", currentFolder);
+		map.put("Url", dbName);
+		map.put("DriverClassName", getDriverClassName(dbName));
+		map.put("UserName", element.getAttribute("DatabaseUser"));
+		map.put("Password", element.getAttribute("DatabasePassword"));
+
+		options = element.getAttribute("DBCP").replaceAll(" ", "");
+		tokenizer1 = new StringTokenizer(options, ",");
+		while (tokenizer1.hasMoreTokens()) {
+			option = tokenizer1.nextToken();
+			tokenizer2 = new StringTokenizer(option, "=");
+			key = tokenizer2.nextToken();
+			value = tokenizer2.nextToken();
+			if (key.equals("MaxActive")) {
+				map.put(key, Integer.parseInt(value));
+			}
+			if (key.equals("MaxIdle")) {
+				map.put(key, Integer.parseInt(value));
+			}
+			if (key.equals("MinIdle")) {
+				map.put(key, Integer.parseInt(value));
+			}
+		}
+
+		return map;
+	}
+
+    //////////////////////////////
+	// Get DB Options of Sub-DB //
+	//////////////////////////////
+	private HashMap<String, Object> getSubDbOptionMap(org.w3c.dom.Element element, String currentFolder) {
+		String options, option, key, value;
+		StringTokenizer tokenizer1, tokenizer2;
+
+		HashMap<String, Object> map = new HashMap<String, Object>(); 
+		map.put("MaxActive", 10); //DEFAULT//
+		map.put("MaxIdle", 10); //DEFAULT//
+		map.put("MinIdle", 5); //DEFAULT//
+		
+		map.put("ID", element.getAttribute("ID"));
+		String dbName = element.getAttribute("Name");
+		dbName = dbName.replace("<CURRENT>", currentFolder);
+		map.put("Url", dbName);
+		map.put("DriverClassName", getDriverClassName(dbName));
+		map.put("UserName", element.getAttribute("User"));
+		map.put("Password", element.getAttribute("Password"));
+
+		options = element.getAttribute("DBCP").replaceAll(" ", "");
+		tokenizer1 = new StringTokenizer(options, ",");
+		while (tokenizer1.hasMoreTokens()) {
+			option = tokenizer1.nextToken();
+			tokenizer2 = new StringTokenizer(option, "=");
+			key = tokenizer2.nextToken();
+			value = tokenizer2.nextToken();
+			if (key.equals("MaxActive")) {
+				map.put(key, Integer.parseInt(value));
+			}
+			if (key.equals("MaxIdle")) {
+				map.put(key, Integer.parseInt(value));
+			}
+			if (key.equals("MinIdle")) {
+				map.put(key, Integer.parseInt(value));
+			}
+		}
+
+		return map;
+	}
+
+    /////////////////////////////////////////////
+	// Get Driver Class Name according to DBMS //
+	/////////////////////////////////////////////
+	private String getDriverClassName(String url) {
+		String name = "";
+	    if (url.contains("derby")) {
+	    	name = DRIVER_DERBY;
+	    }
+	    if (url.contains("mysql")) {
+	    	name = DRIVER_MYSQL;
+	    }
+	    if (url.contains("postgresql")) {
+	    	name = DRIVER_POSTGRESQL;
+	    }
+	    if (url.contains("oracle")) {
+	    	name = DRIVER_ORACLE;
+	    }
+	    return name;
 	}
 	
 	///////////////////////////////////////////////////////
@@ -117,48 +264,51 @@ public class DBMethod extends HttpServlet {
 		try {
 			Connection con;
 			String sessionID = "";
+			String lastCommand = "";
 			res.setContentType("text/html; charset=UTF-8");
 			StringBuffer sb = new StringBuffer();
 			sb.append("<html>");
 			sb.append("<head>");
-			sb.append("<title>XEAD Server Status</title>");
+			sb.append("<title>XEAD Server/ DB-Method Controler</title>");
 			sb.append("</head>");
 			sb.append("<body>");
 			sb.append("<h3>XEAD Server Database Connections</h3>");
 			sb.append("<table border='2' cellpadding='2'>");
-			sb.append("<tr style='background:#ccccff'><th>DB ID</th><th>Session ID</th><th>Connection</th></tr>");
+			sb.append("<tr style='background:#ccccff'><th>DB ID</th><th>Session ID</th><th>Connection</th><th>Last Command Processed</th></tr>");
 			for (int i = 0; i < databaseIDList.size(); i++) {
 				if (databaseIDList.get(i).equals("")) {
 					try {
+						lastCommand = lastCommandList.get(i);
 						con = dataSourceList.get(i).getConnection();
 						if (con == null) {
-							sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>INVALID</td></tr>");
+							sb.append("<tr><td>Main</td><td>*BLANK</td><td>NULL</td><td>" + lastCommand + "</td></tr>");
 						} else {
-							//if (con.isValid(0)) {
-							sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>VALID</td></tr>");
+							sb.append("<tr><td>Main</td><td>*BLANK</td><td>READY</td><td>" + lastCommand + "</td></tr>");
 						}
 					} catch (Exception e) {
-						sb.append("<tr><td>(Main)</td><td>*BLANK</td><td>INVALID</td></tr>");
+						sb.append("<tr><td>Main</td><td>*BLANK</td><td>ERROR: " + e.getMessage() + "</td></tr>");
 					}
-					for (Iterator<String> it = manualCommitConnectionMap.keySet().iterator(); it.hasNext(); ) {
+					for (Iterator<String> it = manualCommitConnectionMapBySession.keySet().iterator(); it.hasNext(); ) {
 						sessionID = it.next();
-						con = manualCommitConnectionMap.get(sessionID);
+						lastCommand = manualCommitLastCommandMapBySession.get(sessionID);
+						con = manualCommitConnectionMapBySession.get(sessionID);
 						if (con == null) {
-							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>INVALID</td></tr>");
+							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>NULL</td><td>" + lastCommand + "</td></tr>");
 						} else {
-							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>VALID</td></tr>");
+							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>READY</td><td>" + lastCommand + "</td></tr>");
 						}
 					}
 				} else {
 					try {
+						lastCommand = lastCommandList.get(i);
 						con = dataSourceList.get(i).getConnection();
 						if (con == null) {
-							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>INVALID</td></tr>");
+							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>NULL</td><td>" + lastCommand + "</td></tr>");
 						} else {
-							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>VALID</td></tr>");
+							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>READY</td><td>" + lastCommand + "</td></tr>");
 						}
 					} catch (Exception e) {
-						sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>INVALID</td></tr>");
+						sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>ERROR: " + e.getMessage() + "</td></tr>");
 					}
 				}
 			}
@@ -180,7 +330,7 @@ public class DBMethod extends HttpServlet {
 		String parmSessionID = "";
 		String parmMethod = "";
 		String parmDBID = "";
-		//
+
 		if (req.getParameter("SESSION") != null) {
 			parmSessionID = req.getParameter("SESSION");
 		}
@@ -190,9 +340,9 @@ public class DBMethod extends HttpServlet {
 		if (req.getParameter("DB") != null) {
 			parmDBID = req.getParameter("DB");
 		}
-		//
+
 		res.setContentType("text/html; charset=UTF-8");
-		//
+
 		try {
 			if (parmMethod.toUpperCase().startsWith("SELECT ")) {
 				if (parmMethod.toUpperCase().contains("COUNT(")) {
@@ -232,14 +382,6 @@ public class DBMethod extends HttpServlet {
 				out.print("The procedure was executed.");
 				out.close();
 			}
-//			if (parmMethod.toUpperCase().equals("STATUS")) {
-//				StringBuffer buf = new StringBuffer();
-//				buf.append("Session ID of Manual-Commit connection:\n");
-//				buf.append(manualCommitConnectionMap.keySet());
-//				PrintWriter out = res.getWriter();
-//				out.println(buf.toString());
-//				out.close();
-//			}
 			if (parmMethod.toUpperCase().equals("IP")) {
 				PrintWriter out = res.getWriter();
 				out.print(req.getRemoteAddr());
@@ -250,15 +392,18 @@ public class DBMethod extends HttpServlet {
 		}
 	}
 	
+	/////////////////////////////////////////////////
+	// Get Relation from Result-Set of the Request //
+	/////////////////////////////////////////////////
 	private Relation getResultOfSelect(String sessionID, String method, String dbID) throws Exception {
 		Connection conn = null;
 		Statement stmt = null;
 		ResultSet rset = null;
 		Relation relation = null;
-		//
+
 		if (method.toUpperCase().startsWith("SELECT ")) {
 			try {
-				conn = getConnectionForSession(sessionID, dbID);
+				conn = getConnectionForSession(sessionID, dbID, method);
 				if (conn == null) {
 					throw new Exception("DB-connection is not available now.");
 				} else {
@@ -279,21 +424,24 @@ public class DBMethod extends HttpServlet {
 				}
 			}
 		}
-		//
+
 		return relation;
 	}
 	
+	//////////////////////////////////////////////////
+	// Get Count of Record Processed of the Request //
+	//////////////////////////////////////////////////
 	private int getCountOfRecordProcessed(String sessionID, String method, String dbID) throws Exception {
 		Connection conn = null;
 		Statement stmt = null;
 		ResultSet rset = null;
 		int count = -1;
-		//
+
 		if (method.toUpperCase().startsWith("INSERT ")
 			|| method.toUpperCase().startsWith("UPDATE ")
 			|| method.toUpperCase().startsWith("DELETE ")) {
 			try {
-				conn = getConnectionForSession(sessionID, dbID);
+				conn = getConnectionForSession(sessionID, dbID, method);
 				if (conn == null) {
 					throw new Exception("DB-connection is not available now.");
 				} else {
@@ -312,7 +460,7 @@ public class DBMethod extends HttpServlet {
 		} else {
 			if (method.toUpperCase().contains("COUNT(")) {
 				try {
-					conn = getConnectionForSession(sessionID, dbID);
+					conn = getConnectionForSession(sessionID, dbID, method);
 					if (conn == null) {
 						throw new Exception("DB-connection is not available now.");
 					} else {
@@ -335,41 +483,46 @@ public class DBMethod extends HttpServlet {
 				}
 			}
 		}
-		//
+
 		return count;
 	}
 	
-	private Connection getConnectionForSession(String sessionID, String dbID) throws Exception {
+	/////////////////////////////////////////////
+	// Get Connection For the specific session //
+	/////////////////////////////////////////////
+	private Connection getConnectionForSession(String sessionID, String dbID, String command) throws Exception {
 		Connection connection = null;
-		//
 		DataSource dataSource = dataSourceList.get(databaseIDList.indexOf(dbID));
 		if (dbID.equals("")) {
 			if (sessionID.equals("")) {
 				connection = dataSource.getConnection();
 				connection.setAutoCommit(true);
+				lastCommandList.add(databaseIDList.indexOf(dbID), command);
 			} else {
-				if (manualCommitConnectionMap.containsKey(sessionID)) {
-					connection = manualCommitConnectionMap.get(sessionID);
+				if (manualCommitConnectionMapBySession.containsKey(sessionID)) {
+					connection = manualCommitConnectionMapBySession.get(sessionID);
 				} else {
 					connection = dataSource.getConnection();
 					connection.setAutoCommit(false);
-					manualCommitConnectionMap.put(sessionID, connection);
+					manualCommitConnectionMapBySession.put(sessionID, connection);
 				}
+				manualCommitLastCommandMapBySession.put(sessionID, command);
 			}
 		} else {
 			connection = dataSource.getConnection();
 			connection.setReadOnly(true);
 		}
-		//
 		return connection;
 	}
 	
+	/////////////////////////////
+	// Call Database procedure //
+	/////////////////////////////
 	private void callProcedure(String sessionID, String method, String dbID) throws Exception {
 		Connection conn = null;
 		Statement stmt = null;
-		//
 		try {
-			conn = getConnectionForSession(sessionID, dbID);
+			conn = getConnectionForSession(sessionID, dbID, method);
 			if (conn == null) {
 				throw new Exception("DB-connection is not available now.");
 			} else {
@@ -386,18 +539,21 @@ public class DBMethod extends HttpServlet {
 		}
 	}
 	
+	///////////////////////////////////////////////
+	// Close connection for the specific session //
+	///////////////////////////////////////////////
 	private void closeConnectionForSession(String sessionID, String method) throws Exception {
 		if (!sessionID.equals("")) {
 			if (method.toUpperCase().equals("COMMIT") || method.toUpperCase().equals("ROLLBACK")) {
-				if (manualCommitConnectionMap.containsKey(sessionID)) {
-					Connection connection = manualCommitConnectionMap.get(sessionID);
+				if (manualCommitConnectionMapBySession.containsKey(sessionID)) {
+					Connection connection = manualCommitConnectionMapBySession.get(sessionID);
 					if (method.toUpperCase().equals("COMMIT")) {
 						connection.commit();
 					}
 					if (method.toUpperCase().equals("ROLLBACK")) {
 						connection.rollback();
 					}
-					manualCommitConnectionMap.remove(sessionID);
+					manualCommitConnectionMapBySession.remove(sessionID);
 					connection.close();
 				}
 			}
