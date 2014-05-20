@@ -44,10 +44,8 @@ import javax.servlet.ServletException;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
-
 import com.sun.org.apache.xml.internal.serialize.OutputFormat;
 import com.sun.org.apache.xml.internal.serialize.XMLSerializer;
-
 import xeadDriver.Session;
 
 public class Service extends HttpServlet {
@@ -63,6 +61,8 @@ public class Service extends HttpServlet {
 	// GLOBAL VARIANTS //
 	/////////////////////
 	private String fileName = "";
+	private String userID = "";
+	private String password = "";
 	private ArrayList<String> sessionTimeList = new ArrayList<String>();
 	private ArrayList<String> sessionIDList = new ArrayList<String>();
 	private ArrayList<String> sessionFunctionIDList = new ArrayList<String>();
@@ -71,6 +71,8 @@ public class Service extends HttpServlet {
 	public void init() throws ServletException {
 		super.init();
 		fileName = getServletConfig().getInitParameter("SystemDefinition");
+		userID = getServletConfig().getInitParameter("UserID");
+		password = getServletConfig().getInitParameter("Password");
 	}
 	
 	protected void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
@@ -115,7 +117,7 @@ public class Service extends HttpServlet {
 			/////////////////////////////////////////////
 			// Setup and start session for WEB-Service //
 			/////////////////////////////////////////////
-			Session session = new Session(fileName, VERSION);
+			Session session = new Session(fileName, userID, password, VERSION);
 
 			/////////////////////////////
 			// Get function definition //

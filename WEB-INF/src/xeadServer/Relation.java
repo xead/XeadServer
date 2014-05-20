@@ -1,7 +1,7 @@
 package xeadServer;
 
 /*
- * Copyright (c) 2012 WATANABE kozo <qyf05466@nifty.com>,
+ * Copyright (c) 2014 WATANABE kozo <qyf05466@nifty.com>,
  * All rights reserved.
  *
  * This file is part of XEAD Server.
@@ -61,7 +61,6 @@ public class Relation implements Serializable {
 			Object value;
 			ArrayList<Object> valueList;
 			int fieldIndex;
-			int rowIndex = 0;
 			while (rset.next()) {
 				valueList = new ArrayList<Object>();
 				fieldIndex = 1;
@@ -71,7 +70,6 @@ public class Relation implements Serializable {
 					fieldIndex++;
 				}
 				fieldValueList.add(valueList);
-				rowIndex++;
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
