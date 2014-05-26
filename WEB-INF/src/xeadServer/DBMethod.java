@@ -37,7 +37,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
+
 import javax.sql.DataSource;
+
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -45,10 +47,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.StringTokenizer;
+
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.ServletException;
+
 import org.apache.commons.dbcp.BasicDataSource;
 import org.apache.xerces.parsers.DOMParser;
 import org.w3c.dom.NodeList;
@@ -62,7 +66,7 @@ public class DBMethod extends HttpServlet {
 	// APPLICATION INFORMATION //
 	/////////////////////////////
 	public static final String APPLICATION_NAME  = "XEAD Server/ DB Method Controler";
-	public static final String VERSION  = "V1.R0.M1";
+	public static final String VERSION  = "1.0.2";
 
 	///////////////////////////
 	// DB DRIVER CLASS NAMES //
@@ -71,6 +75,7 @@ public class DBMethod extends HttpServlet {
 	private static final String DRIVER_MYSQL = "com.mysql.jdbc.Driver";
 	private static final String DRIVER_POSTGRESQL = "org.postgresql.Driver";
 	private static final String DRIVER_ORACLE = "oracle.jdbc.driver.OracleDriver";
+	private static final String DRIVER_SQLSERVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
 
 	/////////////////////
 	// GLOBAL VARIANTS //
@@ -253,6 +258,9 @@ public class DBMethod extends HttpServlet {
 	    }
 	    if (url.contains("oracle")) {
 	    	name = DRIVER_ORACLE;
+	    }
+	    if (url.contains("sqlserver")) {
+	    	name = DRIVER_SQLSERVER;
 	    }
 	    return name;
 	}
