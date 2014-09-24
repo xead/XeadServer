@@ -34,11 +34,14 @@ package xeadServer;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.HashMap;
+
 import javax.script.Bindings;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
+
 import org.w3c.dom.Element;
+
 import xeadDriver.XFExecutable;
 import xeadDriver.XFScriptable;
 import xeadDriver.XFTableOperator;
@@ -58,6 +61,7 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 	private ByteArrayOutputStream exceptionLog;
 	private PrintStream exceptionStream;
 	private String exceptionHeader = "";
+	private HashMap<String, Object> variantMap = new HashMap<String, Object>();
 
 	public ScriptLauncher(org.w3c.dom.Element functionElement, xeadDriver.Session session) {
 		functionElement_ = functionElement;
@@ -186,6 +190,7 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 			exceptionStream = new PrintStream(exceptionLog);
 			exceptionHeader = "";
 			processLog.delete(0, processLog.length());
+			variantMap.clear();
 			scriptEngine = session_.getScriptEngineManager().getEngineByName("js");
 			engineScriptBindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 			
@@ -203,6 +208,18 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 		}
 
 		return returnMap_;
+	}
+
+	public Object getVariant(String variantID) {
+		if (variantMap.containsKey(variantID)) {
+			return variantMap.get(variantID);
+		} else {
+			return "";
+		}
+	}
+
+	public void setVariant(String variantID, Object value) {
+		variantMap.put(variantID, value);
 	}
 
 	public void runScript() throws ScriptException, Exception {
