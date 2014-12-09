@@ -1,3 +1,7 @@
 ScriptLauncher.java
 2014/09/23
 ・XFScriptableの修正にともなってsetVariant(...)とgetVariant(...)を設けた
+
+DBMethod.java
+2014/11/27
+・connection取得後にsetReadOnly(...)しないようにした。PostgreSQLでエラーになるため

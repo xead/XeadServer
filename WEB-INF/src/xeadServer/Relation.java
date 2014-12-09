@@ -50,14 +50,14 @@ public class Relation implements Serializable {
 		try {
 			currentRowIndex = -1;
 			ResultSetMetaData metaData = rset.getMetaData();
-			//
+
 			tableID_ = metaData.getTableName(1).toUpperCase();
-			//
+
 			int columnCount = metaData.getColumnCount();
 			for (int i=0; i<columnCount; i++) {
 				fieldIDList.add(metaData.getColumnName(i+1).toUpperCase());
 			}
-			//
+
 			Object value;
 			ArrayList<Object> valueList;
 			int fieldIndex;
@@ -153,117 +153,3 @@ public class Relation implements Serializable {
 		return fieldIDList.size();
 	}
 }
-
-//public class Relation implements Serializable {
-//	private static final long serialVersionUID = 1L;
-//	private ArrayList<String> fieldIDList = new ArrayList<String>();
-//	private ArrayList<ArrayList<Object>> fieldValueList = new ArrayList<ArrayList<Object>>();
-//	private int currentRowIndex;
-//
-//	public Relation(ResultSet rset) {
-//		try {
-//			currentRowIndex = -1;
-//			ResultSetMetaData metaData = rset.getMetaData();
-//			int columnCount = metaData.getColumnCount();
-//			for (int i=0; i<columnCount; i++) {
-//				fieldIDList.add(metaData.getColumnName(i+1));
-//			}
-//			Object value;
-//			ArrayList<Object> valueList;
-//			int fieldIndex;
-//			int rowIndex = 0;
-//			while (rset.next()) {
-//				fieldIndex = 1;
-//				valueList = new ArrayList<Object>();
-//				while (fieldIndex <= columnCount) {
-//					value = rset.getObject(fieldIndex);
-//					valueList.add(value);
-//					fieldIndex++;
-//				}
-//				fieldValueList.add(valueList);
-//				rowIndex++;
-//			}
-//		} catch (SQLException e) {
-//			e.printStackTrace();
-//		}
-//	}
-//	
-//	public boolean setRowIndex(int index) {
-//		currentRowIndex = index;
-//		if (fieldValueList.size() > 0
-//				&& currentRowIndex >= 0
-//				&& currentRowIndex < fieldValueList.size()) {
-//			return true;
-//		} else {
-//			currentRowIndex = -1;
-//			return false;
-//		}
-//	}
-//	
-//	public boolean next() {
-//		currentRowIndex++;
-//		if (fieldValueList.size() > 0
-//				&& currentRowIndex >= 0
-//				&& currentRowIndex < fieldValueList.size()) {
-//			return true;
-//		} else {
-//			currentRowIndex = -1;
-//			return false;
-//		}
-//	}
-//	
-//	public boolean previous() {
-//		currentRowIndex--;
-//		if (fieldValueList.size() > 0
-//				&& currentRowIndex >= 0
-//				&& currentRowIndex < fieldValueList.size()) {
-//			return true;
-//		} else {
-//			currentRowIndex = -1;
-//			return false;
-//		}
-//	}
-//
-//	public Object getObject(String fieldID) {
-//		Object value = null;
-//		if (fieldValueList.size() > 0
-//				&& currentRowIndex >= 0
-//				&& currentRowIndex < fieldValueList.size()) {
-//			ArrayList<Object> valueList = fieldValueList.get(currentRowIndex);
-//			int fieldIndex = fieldIDList.indexOf(fieldID);
-//			if (fieldIndex != -1) {
-//				value = valueList.get(fieldIndex);
-//			}
-//		}
-//		return value;
-//	}
-//
-//	public int getIndexOfFieldId(String fieldID) {
-//		return fieldIDList.indexOf(fieldID);
-//	}
-//
-//	public String getFieldIdOfIndex(int index) {
-//		return fieldIDList.get(index);
-//	}
-//
-//	public Object getObjectOfRow(int row, String fieldID) {
-//		Object value = null;
-//		if (row >= 0 && row < fieldValueList.size()) { 
-//			ArrayList<Object> valueList = fieldValueList.get(row);
-//			int fieldIndex = fieldIDList.indexOf(fieldID);
-//			if (fieldIndex != -1) {
-//				value = valueList.get(fieldIndex);
-//			}
-//		}
-//		return value;
-//	}
-//
-//	public int getRowCount() {
-//		return fieldValueList.size();
-//	}
-//
-//	public int getColumnCount() {
-//		return fieldIDList.size();
-//	}
-//
-//}
