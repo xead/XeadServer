@@ -65,7 +65,7 @@ public class DBMethod extends HttpServlet {
 	/////////////////////////////
 	// APPLICATION INFORMATION //
 	/////////////////////////////
-	public static final String APPLICATION_NAME  = "XEAD Server/ DB Method Controler";
+	public static final String APPLICATION_NAME  = "X-TEA Server/ DB Method Controler";
 	public static final String VERSION  = "1.0.2";
 
 	///////////////////////////
@@ -277,10 +277,10 @@ public class DBMethod extends HttpServlet {
 			StringBuffer sb = new StringBuffer();
 			sb.append("<html>");
 			sb.append("<head>");
-			sb.append("<title>XEAD Server/ DB-Method Controler</title>");
+			sb.append("<title>X-TEA Server/ DB-Method Controler</title>");
 			sb.append("</head>");
 			sb.append("<body>");
-			sb.append("<h3>XEAD Server Database Connections</h3>");
+			sb.append("<h3>X-TEA Server Database Connections</h3>");
 			sb.append("<table border='2' cellpadding='2'>");
 			sb.append("<tr style='background:#ccccff'><th>DB ID</th><th>Session ID</th><th>Connection</th><th>Last Command Processed</th></tr>");
 			for (int i = 0; i < databaseIDList.size(); i++) {
