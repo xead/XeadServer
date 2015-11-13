@@ -1,7 +1,7 @@
 package xeadServer;
 
 /*
- * Copyright (c) 2014 WATANABE kozo <qyf05466@nifty.com>,
+ * Copyright (c) 2015 WATANABE kozo <qyf05466@nifty.com>,
  * All rights reserved.
  *
  * This file is part of XEAD Server.
@@ -37,22 +37,22 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
-
-import javax.sql.DataSource;
-
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.StringTokenizer;
-
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.ServletException;
-
 import org.apache.commons.dbcp.BasicDataSource;
 import org.apache.xerces.parsers.DOMParser;
 import org.w3c.dom.NodeList;
@@ -66,7 +66,7 @@ public class DBMethod extends HttpServlet {
 	// APPLICATION INFORMATION //
 	/////////////////////////////
 	public static final String APPLICATION_NAME  = "X-TEA Server/ DB Method Controler";
-	public static final String VERSION  = "1.0.2";
+	public static final String VERSION  = "1.1.0";
 
 	///////////////////////////
 	// DB DRIVER CLASS NAMES //
@@ -76,15 +76,21 @@ public class DBMethod extends HttpServlet {
 	private static final String DRIVER_POSTGRESQL = "org.postgresql.Driver";
 	private static final String DRIVER_ORACLE = "oracle.jdbc.driver.OracleDriver";
 	private static final String DRIVER_SQLSERVER = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+	private static final String DRIVER_ACCESS = "net.ucanaccess.jdbc.UcanaccessDriver";
+	private static final String DRIVER_H2 = "org.h2.Driver";
 
 	/////////////////////
 	// GLOBAL VARIANTS //
 	/////////////////////
 	private ArrayList<String> databaseIDList = new ArrayList<String>();
+	private ArrayList<Integer> errorCountList = new ArrayList<Integer>();
+	private ArrayList<Integer> clearedCountList = new ArrayList<Integer>();
+	private ArrayList<Boolean> databaseReadOnlyEnableList = new ArrayList<Boolean>();
 	private ArrayList<String> lastCommandList = new ArrayList<String>();
-	private ArrayList<DataSource> dataSourceList = new ArrayList<DataSource>();
+	private ArrayList<BasicDataSource> dataSourceList = new ArrayList<BasicDataSource>();
 	private HashMap<String, Connection> manualCommitConnectionMapBySession = new HashMap<String, Connection>();
 	private HashMap<String, String> manualCommitLastCommandMapBySession = new HashMap<String, String>();
+	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss"); 
 	
     //////////////////
 	// Initializing //
@@ -123,6 +129,8 @@ public class DBMethod extends HttpServlet {
 		///////////////////////////////////////
 		dbOptionMap = getMainDbOptionMap(systemElement, currentFolder);
 		databaseIDList.add((String)dbOptionMap.get("ID"));
+		errorCountList.add(0);
+		clearedCountList.add(0);
 		dataSource = new BasicDataSource();
 		dataSource.setDriverClassName((String)dbOptionMap.get("DriverClassName"));
 		dataSource.setUsername((String)dbOptionMap.get("UserName"));
@@ -130,11 +138,12 @@ public class DBMethod extends HttpServlet {
 		dataSource.setUrl((String)dbOptionMap.get("Url"));
 		dataSource.setMaxActive((Integer)dbOptionMap.get("MaxActive"));
 		dataSource.setMaxIdle((Integer)dbOptionMap.get("MaxIdle"));
-		dataSource.setMinIdle((Integer)dbOptionMap.get("MinIdle"));
+		dataSource.setMaxWait((Integer)dbOptionMap.get("MaxWait"));
 		dataSource.setDefaultAutoCommit(false);
 		dataSource.setDefaultReadOnly(false);
 		dataSource.setDefaultTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 		dataSourceList.add(dataSource);
+		databaseReadOnlyEnableList.add((Boolean)dbOptionMap.get("ReadOnlyEnabled"));
 		lastCommandList.add("");
 
 		///////////////////////////////////////
@@ -144,6 +153,8 @@ public class DBMethod extends HttpServlet {
 		for (int i = 0; i < subDBList.getLength(); i++) {
 			dbOptionMap = getSubDbOptionMap((org.w3c.dom.Element)subDBList.item(i), currentFolder);
 			databaseIDList.add((String)dbOptionMap.get("ID"));
+			errorCountList.add(0);
+			clearedCountList.add(0);
 			dataSource = new BasicDataSource();
 			dataSource.setDriverClassName((String)dbOptionMap.get("DriverClassName"));
 			dataSource.setUsername((String)dbOptionMap.get("UserName"));
@@ -151,11 +162,12 @@ public class DBMethod extends HttpServlet {
 			dataSource.setUrl((String)dbOptionMap.get("Url"));
 			dataSource.setMaxActive((Integer)dbOptionMap.get("MaxActive"));
 			dataSource.setMaxIdle((Integer)dbOptionMap.get("MaxIdle"));
-			dataSource.setMinIdle((Integer)dbOptionMap.get("MinIdle"));
+			dataSource.setMaxWait((Integer)dbOptionMap.get("MaxWait"));
 			dataSource.setDefaultAutoCommit(true);
 			dataSource.setDefaultReadOnly(true);
 			dataSource.setDefaultTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 			dataSourceList.add(dataSource);
+			databaseReadOnlyEnableList.add((Boolean)dbOptionMap.get("ReadOnlyEnabled"));
 			lastCommandList.add("");
 		}
 	}
@@ -170,7 +182,7 @@ public class DBMethod extends HttpServlet {
 		HashMap<String, Object> map = new HashMap<String, Object>(); 
 		map.put("MaxActive", 10); //DEFAULT//
 		map.put("MaxIdle", 10); //DEFAULT//
-		map.put("MinIdle", 5); //DEFAULT//
+		map.put("MaxWait", 5000); //DEFAULT//
 		
 		map.put("ID", "");
 		String dbName = element.getAttribute("DatabaseName");
@@ -179,6 +191,11 @@ public class DBMethod extends HttpServlet {
 		map.put("DriverClassName", getDriverClassName(dbName));
 		map.put("UserName", element.getAttribute("DatabaseUser"));
 		map.put("Password", element.getAttribute("DatabasePassword"));
+		if (dbName.contains("jdbc:postgresql")) {
+			map.put("ReadOnlyEnabled", false);
+		} else {
+			map.put("ReadOnlyEnabled", true);
+		}
 
 		options = element.getAttribute("DBCP").replaceAll(" ", "");
 		tokenizer1 = new StringTokenizer(options, ",");
@@ -193,7 +210,7 @@ public class DBMethod extends HttpServlet {
 			if (key.equals("MaxIdle")) {
 				map.put(key, Integer.parseInt(value));
 			}
-			if (key.equals("MinIdle")) {
+			if (key.equals("MaxWait")) {
 				map.put(key, Integer.parseInt(value));
 			}
 		}
@@ -211,7 +228,7 @@ public class DBMethod extends HttpServlet {
 		HashMap<String, Object> map = new HashMap<String, Object>(); 
 		map.put("MaxActive", 10); //DEFAULT//
 		map.put("MaxIdle", 10); //DEFAULT//
-		map.put("MinIdle", 5); //DEFAULT//
+		map.put("MaxWait", 5000); //DEFAULT//
 		
 		map.put("ID", element.getAttribute("ID"));
 		String dbName = element.getAttribute("Name");
@@ -220,6 +237,11 @@ public class DBMethod extends HttpServlet {
 		map.put("DriverClassName", getDriverClassName(dbName));
 		map.put("UserName", element.getAttribute("User"));
 		map.put("Password", element.getAttribute("Password"));
+		if (dbName.contains("jdbc:postgresql")) {
+			map.put("ReadOnlyEnabled", false);
+		} else {
+			map.put("ReadOnlyEnabled", true);
+		}
 
 		options = element.getAttribute("DBCP").replaceAll(" ", "");
 		tokenizer1 = new StringTokenizer(options, ",");
@@ -234,7 +256,7 @@ public class DBMethod extends HttpServlet {
 			if (key.equals("MaxIdle")) {
 				map.put(key, Integer.parseInt(value));
 			}
-			if (key.equals("MinIdle")) {
+			if (key.equals("MaxWait")) {
 				map.put(key, Integer.parseInt(value));
 			}
 		}
@@ -247,20 +269,26 @@ public class DBMethod extends HttpServlet {
 	/////////////////////////////////////////////
 	private String getDriverClassName(String url) {
 		String name = "";
-	    if (url.contains("derby")) {
+	    if (url.contains("jdbc:derby")) {
 	    	name = DRIVER_DERBY;
 	    }
-	    if (url.contains("mysql")) {
+	    if (url.contains("jdbc:mysql")) {
 	    	name = DRIVER_MYSQL;
 	    }
-	    if (url.contains("postgresql")) {
+	    if (url.contains("jdbc:postgresql")) {
 	    	name = DRIVER_POSTGRESQL;
 	    }
-	    if (url.contains("oracle")) {
+	    if (url.contains("jdbc:oracle")) {
 	    	name = DRIVER_ORACLE;
 	    }
-	    if (url.contains("sqlserver")) {
+	    if (url.contains("jdbc:sqlserver")) {
 	    	name = DRIVER_SQLSERVER;
+	    }
+	    if (url.contains("jdbc:ucanaccess")) {
+	    	name = DRIVER_ACCESS;
+	    }
+	    if (url.contains("jdbc:h2")) {
+	    	name = DRIVER_H2;
 	    }
 	    return name;
 	}
@@ -270,7 +298,6 @@ public class DBMethod extends HttpServlet {
 	///////////////////////////////////////////////////////
 	protected void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
 		try {
-			Connection con;
 			String sessionID = "";
 			String lastCommand = "";
 			res.setContentType("text/html; charset=UTF-8");
@@ -280,52 +307,88 @@ public class DBMethod extends HttpServlet {
 			sb.append("<title>X-TEA Server/ DB-Method Controler</title>");
 			sb.append("</head>");
 			sb.append("<body>");
-			sb.append("<h3>X-TEA Server Database Connections</h3>");
+			sb.append("<h3>X-TEA Server(");
+			sb.append(VERSION);
+			sb.append(") Database Connections</h3>");
+
+			///////////////////////////////////////
+			// Number of active/idle connections //
+			///////////////////////////////////////
 			sb.append("<table border='2' cellpadding='2'>");
-			sb.append("<tr style='background:#ccccff'><th>DB ID</th><th>Session ID</th><th>Connection</th><th>Last Command Processed</th></tr>");
+			sb.append("<tr style='background:#ccccff'><th>DB ID</th><th>MaxActive</th><th>MaxIdle</th><th>MaxWait</th><th>Active</th><th>Idle</th><th>Error</th><th>Cleared</th></tr>");
 			for (int i = 0; i < databaseIDList.size(); i++) {
 				if (databaseIDList.get(i).equals("")) {
-					try {
-						lastCommand = lastCommandList.get(i);
-						con = dataSourceList.get(i).getConnection();
-						if (con == null) {
-							sb.append("<tr><td>Main</td><td>*BLANK</td><td>NULL</td><td>" + lastCommand + "</td></tr>");
-						} else {
-							sb.append("<tr><td>Main</td><td>*BLANK</td><td>READY</td><td>" + lastCommand + "</td></tr>");
-						}
-					} catch (Exception e) {
-						sb.append("<tr><td>Main</td><td>*BLANK</td><td>ERROR: " + e.getMessage() + "</td></tr>");
-					}
+					sb.append("<tr><td>Main</td><td align='right'>"
+							+ dataSourceList.get(i).getMaxActive()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getMaxIdle()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getMaxWait()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getNumActive()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getNumIdle()
+							+ "</td><td align='right'>"
+							+ errorCountList.get(i) 
+							+ "</td><td align='right'>"
+							+ clearedCountList.get(i) 
+							+ "</td></tr>");
+				} else {
+					sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td align='right'>"
+							+ dataSourceList.get(i).getMaxActive()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getMaxIdle()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getMaxWait()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getNumActive()
+							+ "</td><td align='right'>"
+							+ dataSourceList.get(i).getNumIdle()
+							+ "</td><td align='right'>"
+							+ errorCountList.get(i) 
+							+ "</td><td align='right'>"
+							+ clearedCountList.get(i) 
+							+ "</td></tr>");
+				}
+			}
+			sb.append("</table><br>");
+
+			//////////////////////////////////
+			// Connection status by session //
+			//////////////////////////////////
+			int rowNumber = 0;
+			sb.append("<table border='2' cellpadding='2'>");
+			sb.append("<tr style='background:#ccccff'><th>No.</th><th>DB ID</th><th>Session ID</th><th>Last Command Processed</th></tr>");
+			for (int i = 0; i < databaseIDList.size(); i++) {
+				if (databaseIDList.get(i).equals("")) {
+					rowNumber++;
+					lastCommand = lastCommandList.get(i);
+					sb.append("<tr><td align='right'>" + rowNumber + "</td><td>Main</td><td>"
+							+ "*SYSTEM" + "</td><td>" + lastCommand + "</td></tr>");
+
 					for (Iterator<String> it = manualCommitConnectionMapBySession.keySet().iterator(); it.hasNext(); ) {
+						rowNumber++;
 						sessionID = it.next();
 						lastCommand = manualCommitLastCommandMapBySession.get(sessionID);
-						con = manualCommitConnectionMapBySession.get(sessionID);
-						if (con == null) {
-							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>NULL</td><td>" + lastCommand + "</td></tr>");
-						} else {
-							sb.append("<tr><td>Main</td><td>" + sessionID + "</td><td>READY</td><td>" + lastCommand + "</td></tr>");
-						}
+						sb.append("<tr><td align='right'>" + rowNumber + "</td><td>Main</td><td>"
+								+ sessionID + "</td><td>" + lastCommand + "</td></tr>");
 					}
+
 				} else {
-					try {
-						lastCommand = lastCommandList.get(i);
-						con = dataSourceList.get(i).getConnection();
-						if (con == null) {
-							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>NULL</td><td>" + lastCommand + "</td></tr>");
-						} else {
-							sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>READY</td><td>" + lastCommand + "</td></tr>");
-						}
-					} catch (Exception e) {
-						sb.append("<tr><td>" + databaseIDList.get(i) + "</td><td>*BLANK</td><td>ERROR: " + e.getMessage() + "</td></tr>");
-					}
+					rowNumber++;
+					lastCommand = lastCommandList.get(i);
+					sb.append("<tr><td align='right'>" + rowNumber + "</td><td>" + databaseIDList.get(i) + "</td><td>"
+							+ "*SYSTEM" + "</td><td>" + lastCommand + "</td></tr>");
 				}
 			}
 			sb.append("</table>");
+
 			sb.append("</body>");
 			sb.append("</html>");
 			PrintWriter out = res.getWriter();
 			out.print(new String(sb));
 			out.close();
+
 		} catch (Exception e) {	
 			res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
 		}
@@ -335,10 +398,11 @@ public class DBMethod extends HttpServlet {
 	// Processing "Post" requests to return serialized result sets //
 	/////////////////////////////////////////////////////////////////
 	protected void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
+		res.setContentType("text/html; charset=UTF-8");
+
 		String parmSessionID = "";
 		String parmMethod = "";
 		String parmDBID = "";
-
 		if (req.getParameter("SESSION") != null) {
 			parmSessionID = req.getParameter("SESSION");
 		}
@@ -348,8 +412,6 @@ public class DBMethod extends HttpServlet {
 		if (req.getParameter("DB") != null) {
 			parmDBID = req.getParameter("DB");
 		}
-
-		res.setContentType("text/html; charset=UTF-8");
 
 		try {
 			if (parmMethod.toUpperCase().startsWith("SELECT ")) {
@@ -395,8 +457,29 @@ public class DBMethod extends HttpServlet {
 				out.print(req.getRemoteAddr());
 				out.close();
 			}
-		} catch (Exception e) {	
-			res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+
+		} catch (Exception e) {
+
+			///////////////////////////////////////
+			// Close connection for this session //
+			///////////////////////////////////////
+			String sessionID = getSessionIDFromMethod(parmMethod);
+			if (!sessionID.equals("")) {
+				try {
+					closeConnectionForSession(sessionID, "ROLLBACK");
+				} catch (Exception e1) {
+				}
+			}
+
+			//////////////////////////
+			// Handle Error Message //
+			//////////////////////////
+			StringWriter stringWriter = new StringWriter();
+            PrintWriter printWriter = new PrintWriter(stringWriter);
+            e.printStackTrace(printWriter);
+			lastCommandList.add(databaseIDList.indexOf(parmDBID), parmMethod + "<br>Exception: " + e.getMessage() + "<br>" + stringWriter.toString());
+			errorCountList.add(databaseIDList.indexOf(parmDBID), errorCountList.get(databaseIDList.indexOf(parmDBID)) + 1);
+			res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error:<br>"+e.getMessage());
 		}
 	}
 	
@@ -415,11 +498,18 @@ public class DBMethod extends HttpServlet {
 				if (conn == null) {
 					throw new Exception("DB-connection is not available now.");
 				} else {
-					//conn.setReadOnly(true);
-					stmt = conn.createStatement();
-					rset = stmt.executeQuery(method);
-					relation = new Relation(rset);
+					if (databaseReadOnlyEnableList.get(databaseIDList.indexOf(dbID))) {
+						conn.setReadOnly(true);
+					}
+					if (conn.isClosed()) {
+						throw new Exception("DB-connection for this session is already closed.");
+					} else {
+						stmt = conn.createStatement();
+						rset = stmt.executeQuery(method);
+						relation = new Relation(rset);
+					}
 				}
+
 			} finally {
 				if (conn != null && (sessionID.equals("") || !dbID.equals(""))) {
 					conn.close();
@@ -435,7 +525,23 @@ public class DBMethod extends HttpServlet {
 
 		return relation;
 	}
-	
+
+	/////////////////////////////////////
+	// Retrieve Session ID from Method //
+	/////////////////////////////////////
+	private String getSessionIDFromMethod(String method) {
+		String sessionID = "";
+		String methodWork = method.replaceAll(" ", "").toUpperCase();
+		if (methodWork.contains("(NRSESSION,")) {
+			int pos1 = methodWork.indexOf("VALUES('");
+			if (pos1 > 0) {
+				int pos2 = methodWork.indexOf("'", pos1+8);
+				sessionID = methodWork.substring(pos1+8, pos2);
+			}
+		}
+		return sessionID;
+	}
+
 	//////////////////////////////////////////////////
 	// Get Count of Record Processed of the Request //
 	//////////////////////////////////////////////////
@@ -453,18 +559,27 @@ public class DBMethod extends HttpServlet {
 				if (conn == null) {
 					throw new Exception("DB-connection is not available now.");
 				} else {
-					//conn.setReadOnly(false);
-					stmt = conn.createStatement();
-					count = stmt.executeUpdate(method);
+					if (conn.isClosed()) {
+						throw new Exception("DB-connection for this session is already closed.");
+					} else {
+						if (databaseReadOnlyEnableList.get(databaseIDList.indexOf(dbID))) {
+							conn.setReadOnly(false);
+						}
+						stmt = conn.createStatement();
+						count = stmt.executeUpdate(method);
+					}
 				}
+
 			} finally {
 				if(conn != null && sessionID.equals("")) {
+					conn.commit();
 					conn.close();
 				}
 				if(stmt != null){
 					stmt.close();	
 				}		    
 			}
+
 		} else {
 			if (method.toUpperCase().contains("COUNT(")) {
 				try {
@@ -472,12 +587,20 @@ public class DBMethod extends HttpServlet {
 					if (conn == null) {
 						throw new Exception("DB-connection is not available now.");
 					} else {
-						stmt = conn.createStatement();
-						rset = stmt.executeQuery(method);
-    					if (rset.next()) {
-    						count = rset.getInt(1);
-    					}
+						if (conn.isClosed()) {
+							throw new Exception("DB-connection for this session is already closed.");
+						} else {
+							if (databaseReadOnlyEnableList.get(databaseIDList.indexOf(dbID))) {
+								conn.setReadOnly(true);
+							}
+							stmt = conn.createStatement();
+							rset = stmt.executeQuery(method);
+							if (rset.next()) {
+								count = rset.getInt(1);
+							}
+						}
 					}
+
 				} finally {
 					if (conn != null && (sessionID.equals("") || !dbID.equals(""))) {
 						conn.close();
@@ -500,26 +623,72 @@ public class DBMethod extends HttpServlet {
 	/////////////////////////////////////////////
 	private Connection getConnectionForSession(String sessionID, String dbID, String command) throws Exception {
 		Connection connection = null;
-		DataSource dataSource = dataSourceList.get(databaseIDList.indexOf(dbID));
+		BasicDataSource dataSource = dataSourceList.get(databaseIDList.indexOf(dbID));
+		Date currentDate = new Date(); 
+		String currentTime = " (" + sdf.format(currentDate) + ")";
+
+		//////////////////////////////////////////////////
+		// Close the oldest connection if active in max //
+		//////////////////////////////////////////////////
+		if ((dataSource.getNumActive() + 1) >= dataSource.getMaxActive()) {
+			int pos1, pos2;
+			String wrkStr, oldestSessionID = "";
+			Date dateTime;
+			long currentTimeLong = currentDate.getTime();
+			long timeLong;
+			long diffWork, diffTime = 0;
+			List<String> listLastCommand = new ArrayList<String>(manualCommitLastCommandMapBySession.values());
+			List<String> listSessionID = new ArrayList<String>(manualCommitLastCommandMapBySession.keySet());
+			for (int i=0; i < listLastCommand.size(); i++) {
+				pos1 = listLastCommand.get(i).lastIndexOf(" (");
+				pos2 = listLastCommand.get(i).lastIndexOf(")");
+				if (pos1 > 0 && pos2 > 0) {
+					wrkStr = listLastCommand.get(i).substring(pos1+2, pos2);
+					try {
+						dateTime = sdf.parse(wrkStr);
+						timeLong = dateTime.getTime();
+						diffWork = currentTimeLong - timeLong;
+						if (diffWork > diffTime) {
+							diffTime = diffWork;
+							oldestSessionID = listSessionID.get(i);
+						}
+					} catch (ParseException e1) {
+					}
+				}
+			}
+			if (diffTime > 300000 && !oldestSessionID.equals("")) {
+				try {
+					closeConnectionForSession(oldestSessionID, "ROLLBACK");
+					clearedCountList.add(databaseIDList.indexOf(dbID), clearedCountList.get(databaseIDList.indexOf(dbID)) + 1);
+				} catch (Exception e1) {
+				}
+			}
+		}
+
+		//////////////////////////////////
+		// Get the connection available //
+		//////////////////////////////////
 		if (dbID.equals("")) {
 			if (sessionID.equals("")) {
 				connection = dataSource.getConnection();
-				connection.setAutoCommit(true);
-				lastCommandList.add(databaseIDList.indexOf(dbID), command);
+				lastCommandList.add(databaseIDList.indexOf(dbID), command + currentTime);
 			} else {
 				if (manualCommitConnectionMapBySession.containsKey(sessionID)) {
 					connection = manualCommitConnectionMapBySession.get(sessionID);
 				} else {
 					connection = dataSource.getConnection();
-					connection.setAutoCommit(false);
 					manualCommitConnectionMapBySession.put(sessionID, connection);
 				}
-				manualCommitLastCommandMapBySession.put(sessionID, command);
+				manualCommitLastCommandMapBySession.put(sessionID, command + currentTime);
 			}
 		} else {
 			connection = dataSource.getConnection();
-			//connection.setReadOnly(true);
+			if (databaseReadOnlyEnableList.get(databaseIDList.indexOf(dbID))) {
+				connection.setReadOnly(true);
+			}
+			lastCommandList.add(databaseIDList.indexOf(dbID), command + currentTime);
 		}
+
 		return connection;
 	}
 	
@@ -539,6 +708,7 @@ public class DBMethod extends HttpServlet {
 			}
 		} finally {
 			if(conn != null && (sessionID.equals("") || !dbID.equals(""))) {
+				conn.commit();
 				conn.close();
 			}
 			if(stmt != null){
@@ -562,6 +732,7 @@ public class DBMethod extends HttpServlet {
 						connection.rollback();
 					}
 					manualCommitConnectionMapBySession.remove(sessionID);
+					manualCommitLastCommandMapBySession.remove(sessionID);
 					connection.close();
 				}
 			}

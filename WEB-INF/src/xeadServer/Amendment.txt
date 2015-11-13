@@ -1,8 +1,8 @@
-xteasrv.bat
+xteasrv.jar
 2015/07/10
 ・Java1.8コンパイラで再作成した
 
-xeadsrv.bat
+xeadsrv.jar
 2015/04/27
 ・Java1.8コンパイラで再作成した
 
@@ -11,7 +11,12 @@ ScriptLauncher.java
 ・XFScriptableの修正にともなってsetVariant(...)とgetVariant(...)を設けた
 
 DBMethod.java
-2015/07/10
+<1.0.0 2015/07/10>
 ・XEADの表現をX-TEAに変更した
-2014/11/27
+<1.0.1 2014/11/27>
 ・connection取得後にsetReadOnly(...)しないようにした。PostgreSQLでエラーになるため
+<1.1.0 2015/11/08>
+・Get処理でのconnection取得のステップを除いた
+・制御用ページの出力内容を改善した
+・DBCPのパラメータとしてMinIdleをやめてMaxWaitを組み込んだ
+・Post処理で、状況次第で自動的に古いconnectionを終了・解放するようにした
