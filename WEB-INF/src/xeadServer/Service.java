@@ -1,7 +1,7 @@
 package xeadServer;
 
 /*
- * Copyright (c) 2014 WATANABE kozo <qyf05466@nifty.com>,
+ * Copyright (c) 2015 WATANABE kozo <qyf05466@nifty.com>,
  * All rights reserved.
  *
  * This file is part of XEAD Server.
@@ -33,7 +33,6 @@ package xeadServer;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -43,10 +42,8 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.ServletException;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
-import org.w3c.dom.NodeList;
 import com.sun.org.apache.xml.internal.serialize.OutputFormat;
 import com.sun.org.apache.xml.internal.serialize.XMLSerializer;
-import xeadDriver.Session;
 
 public class Service extends HttpServlet {
 	private static final long serialVersionUID = 1L;
@@ -54,59 +51,63 @@ public class Service extends HttpServlet {
 	/////////////////////////////
 	// APPLICATION INFORMATION //
 	/////////////////////////////
-	public static final String APPLICATION_NAME  = "XEAD Server/ WEB-Service Controler";
-	public static final String VERSION  = "1.0.1";
+	public static final String APPLICATION_NAME  = "X-TEA Server/ WEB-Service Controler";
+	public static final String VERSION  = "1.0.3";
 
 	/////////////////////
 	// GLOBAL VARIANTS //
 	/////////////////////
 	private String fileName = "";
-	private String userID = "";
-	private String password = "";
-	private ArrayList<String> sessionTimeList = new ArrayList<String>();
-	private ArrayList<String> sessionIDList = new ArrayList<String>();
-	private ArrayList<String> sessionFunctionIDList = new ArrayList<String>();
-	private ArrayList<String> sessionResultList = new ArrayList<String>();
-	
+	private String fixedUserID = "";
+	private String fixedPassword = "";
+	private String dateTimeServeletStarted = "";
+	private String dateTimeFirstSessionStarted = "";
+	private String dateTimeLastSessionStarted = "";
+	private int countOfRequestsRejected = 0;
+	private int countOfSessionsAborted = 0;
+	private int countOfSessionsSucceeded = 0;
+
 	public void init() throws ServletException {
 		super.init();
 		fileName = getServletConfig().getInitParameter("SystemDefinition");
-		userID = getServletConfig().getInitParameter("UserID");
-		password = getServletConfig().getInitParameter("Password");
+		fixedUserID = getServletConfig().getInitParameter("User");
+		if (fixedUserID == null) {
+			fixedUserID = "";
+		}
+		fixedPassword = getServletConfig().getInitParameter("Password");
+		if (fixedPassword == null) {
+			fixedPassword = "";
+		}
+		Calendar cal = Calendar.getInstance();
+		dateTimeServeletStarted = cal.getTime().toString();
 	}
-	
+
 	protected void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
 		try {
-			String function = "";
-			if (req.getParameter("function") != null) {
-				function = req.getParameter("function");
-			}
-
-			if (function.equals("sessionStatus")) {
-				res.setContentType("text/html; charset=UTF-8");
-				StringBuffer sb = new StringBuffer();
-				sb.append("<html>");
-				sb.append("<head>");
-				sb.append("<title>XEAD Server/ WEB-Service Controler</title>");
-				sb.append("</head>");
-				sb.append("<body>");
-				sb.append("<h3>WEB-Service Session Log (User:" + userID + ")</h3>");
-				sb.append("<table border='2' cellpadding='2'>");
-				sb.append("<tr style='background:#ccccff'><th>Date and Time</th><th>Session ID</th><th>Function ID</th><th>Result</th></tr>");
-				if (sessionIDList.size() == 0) {
-					sb.append("<tr><td colspan='4'>(No requests received yet although the service controler is ready.)</td></tr>");
-				} else {
-					for (int i = 0; i < sessionIDList.size(); i++) {
-						sb.append("<tr><td>" + sessionTimeList.get(i) + "</td><td>" + sessionIDList.get(i) + "</td><td>" + sessionFunctionIDList.get(i) + "</td><td>" + sessionResultList.get(i) + "</td></tr>");
-					}
-				}
-				sb.append("</table>");
-				sb.append("</body>");
-				sb.append("</html>");
-				PrintWriter out = res.getWriter();
-				out.print(sb.toString());
-				out.close();
-			}
+			res.setContentType("text/html; charset=UTF-8");
+			StringBuffer sb = new StringBuffer();
+			sb.append("<html>");
+			sb.append("<head>");
+			sb.append("<title>X-TEA Server/ Web Service Controler</title>");
+			sb.append("</head>");
+			sb.append("<body>");
+			sb.append("<h3>X-TEA Server/ Web Service Controler(");
+			sb.append(VERSION);
+			sb.append(") Session Status</h3>");
+			sb.append("<table border='2' cellpadding='2'>");
+			sb.append("<tr><td style='background:#ccccff'>Servelet Started at</td><td>" + dateTimeServeletStarted + "</td></tr>");
+			sb.append("<tr><td style='background:#ccccff'>First Session Started at</td><td>" + dateTimeFirstSessionStarted + "</td></tr>");
+			sb.append("<tr><td style='background:#ccccff'>Last Session Started at</td><td>" + dateTimeLastSessionStarted + "</td></tr>");
+			sb.append("<tr><td style='background:#ccccff'>Count of Requests Rejected</td><td>" + countOfRequestsRejected + "</td></tr>");
+			sb.append("<tr><td style='background:#ccccff'>Count of Sessions Succeeded</td><td>" + countOfSessionsSucceeded + "</td></tr>");
+			sb.append("<tr><td style='background:#ccccff'>Count of Sessions Aborted</td><td>" + countOfSessionsAborted + "</td></tr>");
+			sb.append("</table>");
+			sb.append("*Refer to session log for details.");
+			sb.append("</body>");
+			sb.append("</html>");
+			PrintWriter out = res.getWriter();
+			out.print(sb.toString());
+			out.close();
 		} catch (Exception e) {	
 			res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
 		}
@@ -114,121 +115,122 @@ public class Service extends HttpServlet {
 
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		try {
-			/////////////////////////////////////////////
-			// Setup and start session for WEB-Service //
-			/////////////////////////////////////////////
-			Session session = new Session(fileName, userID, password, VERSION);
-
 			/////////////////////////////
-			// Get function definition //
+			// Get userID and password //
 			/////////////////////////////
-			String functionID = "";
-			if (request.getParameter("function") != null) {
-				functionID = request.getParameter("function");
+			String userID = request.getParameter("USER");
+			String password = request.getParameter("PASSWORD");
+			if (userID == null || userID.equals("")) {
+				userID = fixedUserID;
 			}
-			org.w3c.dom.Element element;
-			org.w3c.dom.Element functionElement = null;
-			NodeList functionElementList = session.getFunctionList();
-			for (int i = 0; i < functionElementList.getLength(); i++) {
-				element = (org.w3c.dom.Element)functionElementList.item(i);
-				if (element.getAttribute("ID").equals(functionID)
-						&& element.getAttribute("Type").equals("XF000")) {
-					functionElement = element;
-					break;
-				}
+			if (password == null || password.equals("")) {
+				password = fixedPassword;
 			}
-			if (functionElement == null) {
 
-				//////////////////////////////////////////////
-				// Close Session without executing function //
-				//////////////////////////////////////////////
-				session.closeSession(true);
-
-				///////////////////////////////////
-				// Write Session Log for Browser //
-				///////////////////////////////////
-				Calendar cal = Calendar.getInstance();
-				sessionTimeList.add(cal.getTime().toString());
-				sessionIDList.add(session.getSessionID());
-				sessionFunctionIDList.add(functionID);
-				sessionResultList.add("Invalid function requested.");
-
-				///////////////////////////////
-				// Setup and return response //
-				///////////////////////////////
-				response.setContentType("text/html; charset=UTF-8");
+			/////////////////////////////////////////////////
+			// Reject login if userID or password is blank //
+			/////////////////////////////////////////////////
+			if (userID.equals("") || password.equals("")) {
+				countOfRequestsRejected++;
+				response.setContentType("text/html;charset=UTF-8");
 				PrintWriter out = response.getWriter();
-				out.print("Invalid function ID requested : '" + functionID + "'");
+				out.print("User and password is not specified in Web.xml and http request.");
 				out.close();
 
 			} else {
 
-				/////////////////////////////////////////////////////////
-				// Construct ScriptLauncher for the function requested //
-				/////////////////////////////////////////////////////////
-				ScriptLauncher launcher = new ScriptLauncher(functionElement, session);
+				///////////////////////////////////////////////////
+				// Reject login if FUNCTION parameter is missing //
+				///////////////////////////////////////////////////
+				if (request.getParameter("FUNCTION") == null) {
+					countOfRequestsRejected++;
+					response.setContentType("text/html;charset=UTF-8");
+					PrintWriter out = response.getWriter();
+					out.print("Parameter FUNCTION is missing int the request.");
+					out.close();
 
-				/////////////////////////////////////////////////
-				// Setup parameters and execute ScriptLauncher //
-				/////////////////////////////////////////////////
-				HashMap<String, Object> paramsMap = new HashMap<String, Object>();
-				Enumeration<String> names = request.getParameterNames();
-				while (names.hasMoreElements()){
-					String name = names.nextElement();
-					if (!name.equals("function")) {
-						String[] values = request.getParameterValues(name);
-						if (values.length == 1) {
-							paramsMap.put(name.toUpperCase(), values[0]);
-						} else {
-							if (values.length >= 2) {
-								paramsMap.put(name.toUpperCase(), values);
+				} else {
+
+					/////////////////////////////////////////////
+					// Setup and start session for WEB-Service //
+					/////////////////////////////////////////////
+					Session session = new Session(fileName, userID, password, VERSION);
+
+					/////////////////////////////////////////////////////////
+					// Construct ScriptLauncher for the function requested //
+					/////////////////////////////////////////////////////////
+					ScriptLauncher launcher = new ScriptLauncher(request.getParameter("FUNCTION"), session);
+
+					////////////////////////////////////////////////////
+					// Setup parameters for ScriptLauncher to execute //
+					////////////////////////////////////////////////////
+					HashMap<String, Object> paramsMap = new HashMap<String, Object>();
+					Enumeration<String> names = request.getParameterNames();
+					while (names.hasMoreElements()){
+						String name = names.nextElement();
+						if (!name.equals("FUNCTION")) {
+							String[] values = request.getParameterValues(name);
+							if (values.length == 1) {
+								paramsMap.put(name.toUpperCase(), values[0]);
+							} else {
+								if (values.length >= 2) {
+									paramsMap.put(name.toUpperCase(), values);
+								}
 							}
 						}
 					}
-				}
-				HashMap<String, Object> returnMap = launcher.execute(paramsMap);
-				session.closeSession(true);
+					HashMap<String, Object> returnMap = launcher.execute(paramsMap);
 
-				///////////////////////////////////
-				// Write Session Log for Browser //
-				///////////////////////////////////
-				Calendar cal = Calendar.getInstance();
-				sessionTimeList.add(cal.getTime().toString());
-				sessionIDList.add(session.getSessionID());
-				sessionFunctionIDList.add(functionID);
-				sessionResultList.add(returnMap.get("RETURN_CODE").toString());
+					///////////////////////////////////////////
+					// Close Session according to the result //
+					///////////////////////////////////////////
+					session.closeSession(true);
+					Calendar cal = Calendar.getInstance();
+					if (dateTimeFirstSessionStarted.equals("")) {
+						dateTimeFirstSessionStarted = cal.getTime().toString();
+					}
+					dateTimeLastSessionStarted = cal.getTime().toString();
+					if (returnMap.get("RETURN_CODE").toString().equals("99")) {
+						countOfSessionsAborted++;
+					} else {
+						countOfSessionsSucceeded++;
+					}
 
-				/////////////////////////////////
-				// Setup response to be return //
-				/////////////////////////////////
-				Object result = returnMap.get("RESULT");
-				if (result instanceof JSONObject) {
-					response.setContentType("application/json");
-					JSONObject jsonObj = (JSONObject)result;
-					String resultString = jsonObj.toString();
-					PrintWriter writer = response.getWriter();
-					writer.print(resultString);
-					writer.close();
-				}
-				if (result instanceof Document) {
-					response.setContentType("text/xml");
-					Document document = (Document)result;
-					OutputFormat outputFormat = new OutputFormat(document);
-					outputFormat.setEncoding("UTF-8");
-					PrintWriter writer = response.getWriter();
-					XMLSerializer xmlSerializer = new XMLSerializer(writer, outputFormat);
-					xmlSerializer.serialize(document.getDocumentElement());
-					writer.close();
-				}
-				if (result instanceof String) {
-					response.setContentType("text/plain");
-					String resultString = (String)result;
-					PrintWriter writer = response.getWriter();
-					writer.print(resultString);
-					writer.close();
+					///////////////////////////////////
+					// Setup response to be returned //
+					///////////////////////////////////
+					Object result = returnMap.get("RESULT");
+					if (result instanceof JSONObject) {
+						response.setContentType("application/json;charset=UTF-8");
+						JSONObject jsonObj = (JSONObject)result;
+						String resultString = jsonObj.toString();
+						PrintWriter writer = response.getWriter();
+						writer.print(resultString);
+						writer.close();
+					}
+					if (result instanceof Document) {
+						response.setContentType("text/xml;charset=UTF-8");
+						Document document = (Document)result;
+						OutputFormat outputFormat = new OutputFormat(document);
+						outputFormat.setEncoding("UTF-8");
+						PrintWriter writer = response.getWriter();
+						XMLSerializer xmlSerializer = new XMLSerializer(writer, outputFormat);
+						xmlSerializer.serialize(document.getDocumentElement());
+						writer.close();
+					}
+					if (result instanceof String) {
+						response.setContentType(""
+								+ "");
+						String resultString = (String)result;
+						PrintWriter writer = response.getWriter();
+						writer.print(resultString);
+						writer.close();
+					}
 				}
 			}
+
 		} catch (Exception e) {
+			countOfRequestsRejected++;
 			response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
 		}
 	}

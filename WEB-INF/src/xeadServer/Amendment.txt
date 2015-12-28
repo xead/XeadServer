@@ -1,22 +1,40 @@
-xteasrv.jar
-2015/07/10
-・Java1.8コンパイラで再作成した
-
-xeadsrv.jar
-2015/04/27
-・Java1.8コンパイラで再作成した
-
-ScriptLauncher.java
-2014/09/23
+/////////////////////////
+// ScriptLauncher.java //
+/////////////////////////
+<2014/09/23>
 ・XFScriptableの修正にともなってsetVariant(...)とgetVariant(...)を設けた
 
-DBMethod.java
+////////////////////
+// DBMethod.java  //
+////////////////////
 <1.0.0 2015/07/10>
 ・XEADの表現をX-TEAに変更した
 <1.0.1 2014/11/27>
 ・connection取得後にsetReadOnly(...)しないようにした。PostgreSQLでエラーになるため
-<1.1.0 2015/11/08>
+<1.1.0 2015/12/18>
 ・Get処理でのconnection取得のステップを除いた
 ・制御用ページの出力内容を改善した
 ・DBCPのパラメータとしてMinIdleをやめてMaxWaitを組み込んだ
 ・Post処理で、状況次第で自動的に古いconnectionを終了・解放するようにした
+・Get命令の出力内容を変更した
+
+//////////////////
+// Service.java //
+//////////////////
+<1.0.2 2015/12/18>
+・userIDとpasswordを要求中から受け取れるようにしたた
+・ContentTypeの設定にcharset=UTF-8を含めるようにして漢字の文字化けを避けるようにした
+・Get命令の出力内容を変更した
+<1.0.3 2015/12/22>
+・userIDとpasswordの扱いを変更した
+・専用のSessionクラスを設けた
+・専用のXFTableOperatorクラスを設けた
+・XFExecutable,XFScriptableについてDriverからコピーした
+
+/////////
+// jar //
+/////////
+<2015/04/27>
+・Java1.8コンパイラで再作成した
+<2015/07/10>
+・xteasrv.jarの名前でJava1.8コンパイラで再作成した

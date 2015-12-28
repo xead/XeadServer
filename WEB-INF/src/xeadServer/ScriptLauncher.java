@@ -1,7 +1,7 @@
 package xeadServer;
 
 /*
- * Copyright (c) 2014 WATANABE kozo <qyf05466@nifty.com>,
+ * Copyright (c) 2015 WATANABE kozo <qyf05466@nifty.com>,
  * All rights reserved.
  *
  * This file is part of XEAD Server.
@@ -42,17 +42,19 @@ import javax.script.ScriptException;
 
 import org.w3c.dom.Element;
 
-import xeadDriver.XFExecutable;
-import xeadDriver.XFScriptable;
-import xeadDriver.XFTableOperator;
+import org.w3c.dom.NodeList;
+
+//import xeadDriver.XFExecutable;
+//import xeadDriver.XFScriptable;
+//import xeadDriver.XFTableOperator;
 import xeadDriver.XFUtility;
 
 public class ScriptLauncher implements XFExecutable, XFScriptable {
 	private org.w3c.dom.Element functionElement_ = null;
 	private HashMap<String, Object> parmMap_ = null;
 	private HashMap<String, Object> returnMap_ = new HashMap<String, Object>();
-	private xeadDriver.Session session_ = null;
-	private boolean instanceIsAvailable_ = true;
+	private Session session_ = null;
+//	private boolean instanceIsAvailable_ = true;
 	private boolean errorHasOccured = false;
 	private int programSequence;
 	private StringBuffer processLog = new StringBuffer();
@@ -63,9 +65,30 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 	private String exceptionHeader = "";
 	private HashMap<String, Object> variantMap = new HashMap<String, Object>();
 
-	public ScriptLauncher(org.w3c.dom.Element functionElement, xeadDriver.Session session) {
-		functionElement_ = functionElement;
+//	public ScriptLauncher(org.w3c.dom.Element functionElement, Session session) {
+//		functionElement_ = functionElement;
+//		session_ = session;
+//	}
+
+	public ScriptLauncher(String functionID, Session session) {
+		org.w3c.dom.Element element;
 		session_ = session;
+
+		functionElement_ = null;
+		NodeList functionElementList = session_.getFunctionList();
+		for (int i = 0; i < functionElementList.getLength(); i++) {
+			element = (org.w3c.dom.Element)functionElementList.item(i);
+			if (element.getAttribute("ID").equals(functionID)
+					&& element.getAttribute("Type").equals("XF000")) {
+				functionElement_ = element;
+				break;
+			}
+		}
+		if (functionElement_ == null) {
+			exceptionHeader = "Invalid function ID: " + functionID;
+			errorHasOccured = true;
+			closeFunction();
+		}
 	}
 
 	@Override
@@ -184,7 +207,7 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 			/////////////////////////
 			// Initialize variants //
 			/////////////////////////
-			instanceIsAvailable_ = false;
+			//instanceIsAvailable_ = false;
 			errorHasOccured = false;
 			exceptionLog = new ByteArrayOutputStream();
 			exceptionStream = new PrintStream(exceptionLog);
@@ -203,8 +226,8 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 			cancelWithScriptException(e, "");
 		} catch (Exception e) {
 			cancelWithException(e);
-		} finally {
-			instanceIsAvailable_ = true;
+//		} finally {
+//			instanceIsAvailable_ = true;
 		}
 
 		return returnMap_;
@@ -255,7 +278,7 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 		if (returnMap_.get("RETURN_MESSAGE") != null && !returnMap_.get("RETURN_MESSAGE").equals("")) {
 			setProcessLog(returnMap_.get("RETURN_MESSAGE").toString());
 		}
-		instanceIsAvailable_ = true;
+		//instanceIsAvailable_ = true;
 
 		/////////////////////////////////
 		// Write log to close function //
@@ -284,7 +307,8 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 
 	@Override
 	public boolean isAvailable() {
-		return instanceIsAvailable_;
+		//return instanceIsAvailable_;
+		return true;
 	}
 
 	@Override

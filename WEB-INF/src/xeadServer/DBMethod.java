@@ -307,9 +307,9 @@ public class DBMethod extends HttpServlet {
 			sb.append("<title>X-TEA Server/ DB-Method Controler</title>");
 			sb.append("</head>");
 			sb.append("<body>");
-			sb.append("<h3>X-TEA Server(");
+			sb.append("<h3>X-TEA Server/ DB-Method Controler(");
 			sb.append(VERSION);
-			sb.append(") Database Connections</h3>");
+			sb.append(") DB Connections</h3>");
 
 			///////////////////////////////////////
 			// Number of active/idle connections //
