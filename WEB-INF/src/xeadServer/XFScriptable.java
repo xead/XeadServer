@@ -1,6 +1,8 @@
 package xeadServer;
 
+import java.io.PrintStream;
 import java.util.HashMap;
+
 import javax.script.ScriptException;
 
 /*
@@ -35,6 +37,23 @@ import javax.script.ScriptException;
  */
 
 public interface XFScriptable {
+//	public void cancelWithMessage(String message);
+//	public void cancelWithException(Exception e);
+//	public void cancelWithScriptException(ScriptException e, String scriptName);
+//	public void callFunction(String functionID);
+//	public void commit();
+//	public void rollback();
+//	public String getFunctionID();
+//	public HashMap<String, Object> getParmMap();
+//	public HashMap<String, Object> getReturnMap();
+//	public void setProcessLog(String value);
+//	public StringBuffer getProcessLog();
+//	public XFTableOperator createTableOperator(String oparation, String tableID);
+//	public XFTableOperator createTableOperator(String sqlText);
+//	public Object getFieldObjectByID(String tableID, String fieldID);
+//	public boolean isAvailable();
+//	public Object getVariant(String variantID);
+//	public void setVariant(String variantID, Object value);
 	public void cancelWithMessage(String message);
 	public void cancelWithException(Exception e);
 	public void cancelWithScriptException(ScriptException e, String scriptName);
@@ -48,8 +67,11 @@ public interface XFScriptable {
 	public StringBuffer getProcessLog();
 	public XFTableOperator createTableOperator(String oparation, String tableID);
 	public XFTableOperator createTableOperator(String sqlText);
+	public XFTableEvaluator createTableEvaluator(String tableID);
 	public Object getFieldObjectByID(String tableID, String fieldID);
 	public boolean isAvailable();
 	public Object getVariant(String variantID);
 	public void setVariant(String variantID, Object value);
+	public PrintStream getExceptionStream();
+	public void setErrorAndCloseFunction();
 }

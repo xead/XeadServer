@@ -42,6 +42,7 @@ import java.util.List;
 
 //import javax.swing.JOptionPane;
 
+
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
@@ -191,6 +192,10 @@ public class XFTableOperator {
     public void setDistinctFields(String fields) {
 		sqlText_ = "";
     	selectFields_ = "distinct " + fields;
+    }
+
+    public void setValueOf(String fieldID, Object value) {
+    	addValue(fieldID, value);
     }
 
     public void addValue(String fieldID, Object value) {

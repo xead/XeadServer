@@ -91,6 +91,9 @@ public class Session extends Object {
 	private String userName = "";
 	private String userEmployeeNo = "";
 	private String userEmailAddress = "";
+	private String digestAlgorithmForUser = "MD5";
+	private int countOfExpandForUser = 1;
+	private boolean isValueSaltedForUser = false;
 	private String userTable = "";
 	private String variantsTable = "";
 	private String userVariantsTable = "";
@@ -113,6 +116,7 @@ public class Session extends Object {
 	private String smtpPort = "";
 	private String smtpUser = "";
 	private String smtpPassword = "";
+	private String smtpAdminEmail = "";
 
 	private Connection connectionManualCommit = null;
 	private Connection connectionAutoCommit = null;
@@ -124,7 +128,7 @@ public class Session extends Object {
 
 	private Calendar calendar = GregorianCalendar.getInstance();
 	private org.w3c.dom.Document domDocument;
-	private DigestAdapter digestAdapter = null;
+//	private DigestAdapter digestAdapter = null;
 	private NodeList functionList = null;
 	private NodeList tableList = null;
 	private ArrayList<String> offDateList = new ArrayList<String>();
@@ -178,7 +182,8 @@ public class Session extends Object {
 						/////////////////////////////////////////////////////
 						// Setup select-statement to check login authority //
 						/////////////////////////////////////////////////////
-						String passwordDigested = getDigestAdapter().digest(password);
+						//String passwordDigested = getDigestAdapter().digest(password);
+						String passwordDigested = getDigestedValueForUser(user, password);
 						statementBuf = new StringBuffer();
 						statementBuf.append("select * from ");
 						statementBuf.append(getTableNameOfUser());
@@ -268,6 +273,26 @@ public class Session extends Object {
 			systemFont = "SanSerif";
 		}
 		calendar.setLenient(false);
+
+		/////////////////
+		// Hash Format //
+		/////////////////
+		String hashFormat = element.getAttribute("HashFormat");
+		if (!hashFormat.equals("")) {
+			try {
+				StringTokenizer workTokenizer = new StringTokenizer(hashFormat, ";" );
+				digestAlgorithmForUser = workTokenizer.nextToken(); //Default:MD5
+				if (!digestAlgorithmForUser.equals("MD5")) {
+					new DigestAdapter(digestAlgorithmForUser);
+				}
+				if (workTokenizer.hasMoreTokens()) {
+					countOfExpandForUser = Integer.parseInt(workTokenizer.nextToken()); //Default:1
+				}
+				if (workTokenizer.hasMoreTokens()) {
+					isValueSaltedForUser = Boolean.parseBoolean(workTokenizer.nextToken()); //Default:false
+				}
+			} catch (Exception e) {}
+		}
 		
 		////////////////////
 		// System Folders //
@@ -365,11 +390,12 @@ public class Session extends Object {
 		smtpPort = element.getAttribute("SmtpPort");
 		smtpUser = element.getAttribute("SmtpUser");
 		smtpPassword = element.getAttribute("SmtpPassword");
+		smtpAdminEmail = element.getAttribute("SmtpAdminEmail");
 
-		/////////////////////////////
-		// Setup MD5-Hash Digester //
-		/////////////////////////////
-		digestAdapter = new DigestAdapter("MD5");
+//		/////////////////////////////
+//		// Setup MD5-Hash Digester //
+//		/////////////////////////////
+//		digestAdapter = new DigestAdapter("MD5");
 
 		////////////////////////////////////////
 		// Return if variants setup succeeded //
@@ -1783,17 +1809,34 @@ public class Session extends Object {
 		return array.getJSONObject(index);
 	}
 	
-	public String getDigestedValue(String value, String algorithm) {
-		String digestedValue = "";
-		if (algorithm.equals("MD5")) {
-			digestedValue = digestAdapter.digest(value);
+	public String getDigestedValueForUser(String user, String value) {
+		if (isValueSaltedForUser) {
+			return getDigestedValue(value, digestAlgorithmForUser, countOfExpandForUser, user);
 		} else {
-			try {
-				DigestAdapter adapter = new DigestAdapter(algorithm);
-				digestedValue = adapter.digest(value);
-			} catch (NoSuchAlgorithmException e) {
-				return digestedValue;
+			return getDigestedValue(value, digestAlgorithmForUser, countOfExpandForUser, "");
+		}
+	}
+	public String getDigestedValueForUser(String value) {
+		if (isValueSaltedForUser) {
+			return getDigestedValue(value, digestAlgorithmForUser, countOfExpandForUser, userID);
+		} else {
+			return getDigestedValue(value, digestAlgorithmForUser, countOfExpandForUser, "");
+		}
+	}
+	public String getDigestedValue(String value, String algorithm) {
+		return getDigestedValue(value, algorithm, 1, "");
+	}
+	public String getDigestedValue(String value, String algorithm, int expand, String salt) {
+		String digestedValue = "";
+		int count = expand - 1;
+		try {
+			DigestAdapter adapter = new DigestAdapter(algorithm);
+			digestedValue = adapter.digest(value + salt);
+			for (int i=0;i<count;i++) {
+				digestedValue = adapter.digest(digestedValue + salt);
 			}
+		} catch (NoSuchAlgorithmException e) {
+			return digestedValue;
 		}
 		return digestedValue;
 	}
@@ -2022,9 +2065,9 @@ public class Session extends Object {
 		}
 	}
 
-	DigestAdapter getDigestAdapter() {
-		return digestAdapter;
-	}
+//	DigestAdapter getDigestAdapter() {
+//		return digestAdapter;
+//	}
 
 	String getSystemName() {
 		return systemName;
@@ -2032,6 +2075,10 @@ public class Session extends Object {
 
 	String getVersion() {
 		return systemVersion;
+	}
+
+	public String getAdminEmail() {
+		return smtpAdminEmail;
 	}
 
 	String getTableNameOfUser() {

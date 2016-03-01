@@ -41,12 +41,13 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 
 import org.w3c.dom.Element;
-
 import org.w3c.dom.NodeList;
 
-//import xeadDriver.XFExecutable;
-//import xeadDriver.XFScriptable;
-//import xeadDriver.XFTableOperator;
+
+//import xeadDriver.XFTableEvaluator;
+////import xeadDriver.XFExecutable;
+////import xeadDriver.XFScriptable;
+////import xeadDriver.XFTableOperator;
 import xeadDriver.XFUtility;
 
 public class ScriptLauncher implements XFExecutable, XFScriptable {
@@ -115,7 +116,10 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 
 	@Override
 	public void cancelWithMessage(String message) {
+		returnMap_.put("RETURN_MESSAGE", message);
+		this.rollback();
 		errorHasOccured = true;
+		closeFunction();
 	}
 
 	@Override
@@ -127,6 +131,12 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 		}
 		e.printStackTrace(exceptionStream);
 		this.rollback();
+		errorHasOccured = true;
+		closeFunction();
+	}
+
+	@Override
+	public void setErrorAndCloseFunction() {
 		errorHasOccured = true;
 		closeFunction();
 	}
@@ -155,6 +165,11 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 	}
 
 	@Override
+	public XFTableEvaluator createTableEvaluator(String tableID) {
+		return new XFTableEvaluator(this, tableID, session_);
+	}
+
+	@Override
 	public Object getFieldObjectByID(String arg0, String arg1) {
 		return null;
 	}
@@ -172,6 +187,11 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 	@Override
 	public HashMap<String, Object> getReturnMap() {
 		return returnMap_;
+	}
+
+	@Override
+	public PrintStream getExceptionStream() {
+		return exceptionStream;
 	}
 
 	@Override
