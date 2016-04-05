@@ -33,6 +33,7 @@ package xeadServer;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -41,6 +42,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 //import javax.swing.JOptionPane;
+
+
 
 
 import org.apache.http.HttpEntity;
@@ -487,7 +490,12 @@ public class XFTableOperator {
     public int execute() throws Exception {
     	int count = -1;
         if (logBuf_ != null) {
-        	XFUtility.appendLog(this.getSqlText(), logBuf_);
+        	String text = this.getSqlText();
+        	if (text.length() > 1000) {
+        		XFUtility.appendLog(text.substring(0, 1000) + "...", logBuf_);
+        	} else {
+        		XFUtility.appendLog(text, logBuf_);
+        	}
         }
 		if (session_.getAppServerName().equals("")) {
 			try {
@@ -712,7 +720,10 @@ public class XFTableOperator {
     		value = relation_.getValueOf(fieldID);
     	}
     	if (value == null) {
-    		value = "";
+    		if (value instanceof Blob) {
+    		} else {
+    			value = "";
+    		}
     	} else {
     		if (value instanceof String) {
     			value = value.toString().trim();
