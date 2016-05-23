@@ -128,7 +128,6 @@ public class Session extends Object {
 
 	private Calendar calendar = GregorianCalendar.getInstance();
 	private org.w3c.dom.Document domDocument;
-//	private DigestAdapter digestAdapter = null;
 	private NodeList functionList = null;
 	private NodeList tableList = null;
 	private ArrayList<String> offDateList = new ArrayList<String>();
@@ -163,7 +162,7 @@ public class Session extends Object {
 		XFTableOperator operator;
 		boolean validated = false;
 
-		if (!user.equals("") && !password.equals("")) {
+		if (!user.equals("") && !password.equals("") && userID.matches("[0-9a-zA-Z]+")) {
 			statementBuf = new StringBuffer();
 			statementBuf.append("select * from ");
 			statementBuf.append(getTableNameOfUserVariants());
@@ -2326,6 +2325,42 @@ public class Session extends Object {
 			}
 		}
 		return element3;
+	}
+
+	public String getFieldName(String tableID, String fieldID) {
+		String name = "";
+		org.w3c.dom.Element element = getFieldElement(tableID, fieldID);
+		if (element != null) {
+			name = element.getAttribute("Name");
+		}
+		return name;
+	}
+
+	public String getFieldType(String tableID, String fieldID) {
+		String name = "";
+		org.w3c.dom.Element element = getFieldElement(tableID, fieldID);
+		if (element != null) {
+			name = element.getAttribute("Type");
+		}
+		return name;
+	}
+
+	public String getFieldSize(String tableID, String fieldID) {
+		String name = "";
+		org.w3c.dom.Element element = getFieldElement(tableID, fieldID);
+		if (element != null) {
+			name = element.getAttribute("Size");
+		}
+		return name;
+	}
+
+	public String getFieldDecimal(String tableID, String fieldID) {
+		String name = "";
+		org.w3c.dom.Element element = getFieldElement(tableID, fieldID);
+		if (element != null) {
+			name = element.getAttribute("Decimal");
+		}
+		return name;
 	}
 }
 

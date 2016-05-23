@@ -497,6 +497,10 @@ public class XFTableEvaluator {
 	}
 
 	public int insert() {
+		return insert(false);
+	}
+
+	public int insert(boolean isCheckOnly) {
 		int countOfProcessed = 0;
 		int countOfErrors = 0;
 		try {
@@ -532,7 +536,7 @@ public class XFTableEvaluator {
 				}
 			}
 			if (countOfErrors == 0) {
-				if (hasNoErrorWithKey("INSERT")) {
+				if (hasNoErrorWithKey("INSERT") && !isCheckOnly) {
 					for (int i = 0; i < fieldList.size(); i++) {
 						if (fieldList.get(i).isAutoNumberField()) {
 							fieldList.get(i).setValue(fieldList.get(i).getAutoNumber());
@@ -562,6 +566,10 @@ public class XFTableEvaluator {
 	}
 
 	public int update() {
+		return update(false);
+	}
+
+	public int update(boolean isCheckOnly) {
 		int countOfProcessed = 0;
 
 		try {
@@ -601,7 +609,7 @@ public class XFTableEvaluator {
 				}
 			}
 			if (countOfErrors == 0) {
-				if (hasNoErrorWithKey("UPDATE")) {
+				if (hasNoErrorWithKey("UPDATE") && !isCheckOnly) {
 					tableOperator = instance_.createTableOperator(getSQLToUpdate());
 					countOfProcessed = tableOperator.execute();
 					if (countOfProcessed == 1) {
@@ -618,6 +626,10 @@ public class XFTableEvaluator {
 	}
 
 	public int delete() {
+		return delete(false);
+	}
+
+	public int delete(boolean isCheckOnly) {
 		int countOfProcessed = 0;
 		int countOfErrors = 0;
 		try {
@@ -652,7 +664,7 @@ public class XFTableEvaluator {
 					countOfErrors++;
 				}
 			}
-			if (countOfErrors == 0) {
+			if (countOfErrors == 0 && !isCheckOnly) {
 				tableOperator = instance_.createTableOperator(getSQLToDelete());
 				countOfProcessed = tableOperator.execute();
 				if (countOfProcessed == 1) {
@@ -1362,6 +1374,7 @@ class XFTableEvaluator_Field extends Object implements XFFieldScriptable {
 	private String tableAlias_ = "";
 	private String fieldID_ = "";
 	private String fieldName = "";
+	private int dataSize = 5;
 	private String dataType = "";
 	private String dataTypeOptions = "";
 	private ArrayList<String> dataTypeOptionList;
@@ -1394,6 +1407,7 @@ class XFTableEvaluator_Field extends Object implements XFFieldScriptable {
 		org.w3c.dom.Element fieldElement = evaluator_.getSession().getFieldElement(tableID_, fieldID_);
 		dataType = fieldElement.getAttribute("Type");
 		fieldName = fieldElement.getAttribute("Name");
+		dataSize = Integer.parseInt(fieldElement.getAttribute("Size"));
 		dataTypeOptions = fieldElement.getAttribute("TypeOptions");
 		dataTypeOptionList = XFUtility.getOptionList(dataTypeOptions);
 		if (fieldElement.getAttribute("Nullable").equals("F")) {
@@ -1529,6 +1543,17 @@ class XFTableEvaluator_Field extends Object implements XFFieldScriptable {
 		return XFUtility.isNullValue(this.getBasicType(), value_);
 	}
 
+	public boolean isTooLong() {
+		boolean isError = false;
+		if (dataType.equals("CHAR") &&  value_ != null) {
+			String wrkStr = value_.toString();
+			if (wrkStr.length() > this.dataSize) {
+				isError = true;
+			}
+		}
+		return isError;
+	}
+
 	public void setOldValue(Object object){
 		oldValue_ = object;
 	}
@@ -1543,6 +1568,9 @@ class XFTableEvaluator_Field extends Object implements XFFieldScriptable {
 		}
 		if (this.isNoUpdate() && this.isValueChanged()) {
 			this.setError(XFUtility.RESOURCE.getString("FunctionError51"));
+		}
+		if (this.isTooLong()) {
+			this.setError(XFUtility.RESOURCE.getString("FunctionError55"));
 		}
 		if (!this.isError) {
 			StringTokenizer tokenizer;
