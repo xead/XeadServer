@@ -60,6 +60,7 @@ import javax.mail.internet.*;
 import org.apache.xerces.parsers.*;
 import org.w3c.dom.*;
 import org.xml.sax.*;
+import org.apache.commons.lang.RandomStringUtils;
 import org.apache.http.*;
 import org.apache.http.client.*;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -71,6 +72,11 @@ import org.apache.http.util.EntityUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+
+
+
+import xeadDriver.XFExcelFileOperator;
+//import xeadDriver.XFTableOperator;
 import xeadDriver.XFUtility;
 import xeadDriver.XFHttpRequest;
 import xeadDriver.XFTextFileOperator;
@@ -95,6 +101,7 @@ public class Session extends Object {
 	private int countOfExpandForUser = 1;
 	private boolean isValueSaltedForUser = false;
 	private String userTable = "";
+	private String userFilterValueTable = "";
 	private String variantsTable = "";
 	private String userVariantsTable = "";
 	private String sessionTable = "";
@@ -323,6 +330,7 @@ public class Session extends Object {
 		// System control tables //
 		///////////////////////////
 		userTable = element.getAttribute("UserTable");
+		userFilterValueTable = element.getAttribute("UserFilterValueTable");
 		variantsTable = element.getAttribute("VariantsTable");
 		userVariantsTable = element.getAttribute("UserVariantsTable");
 		numberingTable = element.getAttribute("NumberingTable");
@@ -1224,6 +1232,83 @@ public class Session extends Object {
 		}
 	}
 
+	public String getUserVariantDescription(String variantID, String value) {
+		String strValue = "";
+		try {
+			String sql = "select * from " + userVariantsTable + " where IDUSERKUBUN = '" + variantID + "' and KBUSERKUBUN = '" + value + "'";
+			XFTableOperator operator = new XFTableOperator(this, null, sql, true);
+			if (operator.next()) {
+				strValue = operator.getValueOf("TXUSERKUBUN").toString().trim();
+			}
+		} catch (Exception e) {
+			JOptionPane.showMessageDialog(null, "Accessing to the user variant table failed.\n" + e.getMessage());
+		}
+		return strValue;
+	}
+
+	public HashMap getFilterValueMap(String functionID) {
+		HashMap<String, String> valueMap = null;
+		if (!userFilterValueTable.equals("")) {
+			try {
+				valueMap = new HashMap<String, String>();
+				String sql = "select * from " + userFilterValueTable
+						+ " where IDUSER ='" + this.getUserID()
+						+ "' AND IDFUNCTION = '" + functionID + "'";
+				XFTableOperator operator = new XFTableOperator(this, null, sql, true);
+				while (operator.next()) {
+					valueMap.put(operator.getValueOf("IDFILTER").toString(), operator.getValueOf("TXVALUE").toString());
+				}
+			} catch (Exception e) {
+				valueMap = null;
+			}
+		}
+		return valueMap;
+	}
+
+	public String getFilterValue(String functionID, String filterID) {
+		String value = "";
+		if (!userFilterValueTable.equals("")) {
+			try {
+				String sql = "select * from " + userFilterValueTable
+						+ " where IDUSER ='" + this.getUserID()
+						+ "' AND IDFUNCTION = '" + functionID
+						+ "' AND IDFILTER = '" + filterID + "'";
+				XFTableOperator operator = new XFTableOperator(this, null, sql, true);
+				if (operator.next()) {
+					value = operator.getValueOf("TXVALUE").toString();
+				}
+			} catch (Exception e) {
+			}
+		}
+		return value;
+	}
+
+	public void setFilterValue(String functionID, String filterID, String value) {
+		if (!userFilterValueTable.equals("")) {
+			try {
+				String sql = "select * from " + userFilterValueTable
+						+ " where IDUSER ='" + this.getUserID()
+						+ "' AND IDFUNCTION = '" + functionID
+						+ "' AND IDFILTER = '" + filterID + "'";
+				XFTableOperator operator = new XFTableOperator(this, null, sql, true);
+				if (operator.next()) {
+					sql = "update " + userFilterValueTable
+							+ " set TXVALUE = '" + value
+							+ "' where IDUSER ='" + this.getUserID()
+							+ "' AND IDFUNCTION = '" + functionID
+							+ "' AND IDFILTER = '" + filterID + "'";
+				} else {
+					sql = "insert into " + userFilterValueTable
+							+ " (IDUSER, IDFUNCTION, IDFILTER, TXVALUE) values ("
+							+ "'" + this.getUserID() + "', '" + functionID
+							+ "', '" + filterID + "', '" + value + "')";
+				}
+				operator = new XFTableOperator(this, null, sql, true);
+				operator.execute();
+			} catch (Exception e) {}
+		}
+	}
+
 	public float getAnnualExchangeRate(String currencyCode, int fYear, String type) {
 		float rateReturn = 0;
 		if (currencyCode.equals(getSystemVariantString("SYSTEM_CURRENCY"))) {
@@ -1294,6 +1379,30 @@ public class Session extends Object {
 			float rate = 0;
 			try {
 				String sql = "select * from " + taxTable + " order by DTSTART DESC";
+				XFTableOperator operator = new XFTableOperator(this, null, sql, true);
+				while (operator.next()) {
+					fromDate = Integer.parseInt(operator.getValueOf("DTSTART").toString().replaceAll("-", ""));
+					if (targetDate >= fromDate) {
+						rate = Float.parseFloat(operator.getValueOf("VLTAXRATE").toString());
+						break;
+					}
+				}
+				taxAmount = (int)Math.floor(amount * rate);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		return taxAmount;
+	}
+
+	public int getTaxAmount(String date, int amount, String kbKazei) {
+		int fromDate = 0;
+		int taxAmount = 0;
+		if (date != null && !date.equals("")) {
+			int targetDate = Integer.parseInt(date.replaceAll("-", "").replaceAll("/", ""));
+			float rate = 0;
+			try {
+				String sql = "select * from " + taxTable + " where KBKAZEI = '" + kbKazei  + "' order by DTSTART DESC";
 				XFTableOperator operator = new XFTableOperator(this, null, sql, true);
 				while (operator.next()) {
 					fromDate = Integer.parseInt(operator.getValueOf("DTSTART").toString().replaceAll("-", ""));
@@ -1795,6 +1904,9 @@ public class Session extends Object {
 	public JSONObject createJsonObject() throws Exception {
 		return new JSONObject();
 	}
+	public JSONArray createJsonArray() throws Exception {
+		return new JSONArray();
+	}
 	public JSONArray createJsonArray(String text) throws Exception {
 		return new JSONArray(text);
 	}
@@ -1822,6 +1934,10 @@ public class Session extends Object {
 			return getDigestedValue(value, digestAlgorithmForUser, countOfExpandForUser, "");
 		}
 	}
+
+	public String getDigestedValue(String value) {
+		return getDigestedValueForUser(value);
+	}
 	public String getDigestedValue(String value, String algorithm) {
 		return getDigestedValue(value, algorithm, 1, "");
 	}
@@ -1838,6 +1954,9 @@ public class Session extends Object {
 			return digestedValue;
 		}
 		return digestedValue;
+	}
+	public String getRandomString(int length, String characters) {
+		return RandomStringUtils.random(length, characters);
 	}
 
 	public String getAddressFromZipNo(String zipNo) {
@@ -1966,6 +2085,49 @@ public class Session extends Object {
 			return currentFile.renameTo(newFile);
 	}
 
+	public boolean copyFile(String originalName, String newName) {
+		boolean result = false;
+		try {
+			if (originalName.contains("<CURRENT>")) {
+				originalName = originalName.replace("<CURRENT>", currentFolder);
+			}
+			if (newName.contains("<CURRENT>")) {
+				newName = newName.replace("<CURRENT>", currentFolder);
+			}
+			File originalFile = new File(originalName);
+			if (!originalFile.exists()) {
+				return result;
+			}
+			File newFile = new File(newName);
+			if (!newFile.exists()) {
+				newFile.createNewFile();
+			}
+			FileInputStream fis  = new FileInputStream(originalFile);
+			FileOutputStream fos = new FileOutputStream(newFile);
+			try {
+				byte[] buf = new byte[1024];
+				int i = 0;
+				while ((i = fis.read(buf)) != -1) {
+					fos.write(buf, 0, i);
+				}
+				result = true;
+			} catch (Exception e) {
+			} finally {
+				try {
+					if (fis != null) fis.close();
+				} catch (IOException e) {}
+				try {
+					if (fos != null) fos.close();
+				} catch (IOException e) {}
+			}
+		} catch (Exception e) {}
+		return result;
+	}
+
+	public XFExcelFileOperator createExcelFileOperator(String fileName) {
+		return new XFExcelFileOperator(fileName);
+	}
+
 	public XFTextFileOperator createTextFileOperator(String operation, String fileName, String separator) {
 		return createTextFileOperator(operation, fileName, separator, "");
 	}
@@ -1991,6 +2153,93 @@ public class Session extends Object {
 
 	public XFTableOperator createTableOperator(String sqlText) {
 		return new XFTableOperator(this, null, sqlText, true);
+	}
+
+	public boolean copyTableRecords(String fromTable, String toTable, String type) {
+		org.w3c.dom.Element workElement; int count;
+
+		XFTableOperator selectFromTable = createTableOperator("SELECT", fromTable);
+		org.w3c.dom.Element tableElementFrom = getTableElement(fromTable);
+		NodeList fieldList = tableElementFrom.getElementsByTagName("Field");
+		ArrayList<String> fieldIDList = new ArrayList<String>();
+		for (int i = 0; i < fieldList.getLength(); i++) {
+			workElement = (org.w3c.dom.Element)fieldList.item(i);
+			fieldIDList.add(workElement.getAttribute("ID"));
+		}
+
+		XFTableOperator selectToTable; XFTableOperator deleteToTable;
+		XFTableOperator updateToTable; XFTableOperator insertToTable;
+		org.w3c.dom.Element tableElementTo = getTableElement(toTable);
+		NodeList keyListToTable = tableElementTo.getElementsByTagName("Key");
+		ArrayList<String> keyFieldIDList = new ArrayList<String>();
+		for (int i = 0; i < keyListToTable.getLength(); i++) {
+			workElement = (org.w3c.dom.Element)keyListToTable.item(i);
+			if (workElement.getAttribute("Type").equals("PK")) {
+				StringTokenizer workTokenizer = new StringTokenizer(workElement.getAttribute("Fields"), ";" );
+				while (workTokenizer.hasMoreTokens()) {
+					keyFieldIDList.add(workTokenizer.nextToken());
+				}
+				break;
+			}
+		}
+
+		try {
+			if (type.equals("REPLACE") || type.equals("ADD")) {
+				if (type.equals("REPLACE")) {
+					deleteToTable = createTableOperator("DELETE", toTable);
+					deleteToTable.execute();
+				}
+				while (selectFromTable.next()) {
+					insertToTable = createTableOperator("INSERT", toTable);
+					for (int i = 0; i < fieldIDList.size(); i++) {
+						insertToTable.addValue(fieldIDList.get(i), selectFromTable.getValueOf(fieldIDList.get(i)));
+					}
+					count = insertToTable.execute();
+					if (count != 1) {
+						commit(false, null); //roll-back//
+						return false;
+					}
+				}
+			}
+			if (type.equals("MERGE")) {
+				while (selectFromTable.next()) {
+					selectToTable = createTableOperator("SELECT", toTable);
+					for (int i = 0; i < keyFieldIDList.size(); i++) {
+						selectToTable.addKeyValue(keyFieldIDList.get(i), selectFromTable.getValueOf(keyFieldIDList.get(i)));
+					}
+					if (selectToTable.next()) {
+						updateToTable = createTableOperator("UPDATE", toTable);
+						for (int i = 0; i < fieldIDList.size(); i++) {
+							updateToTable.addValue(fieldIDList.get(i), selectFromTable.getValueOf(fieldIDList.get(i)));
+						}
+						for (int i = 0; i < keyFieldIDList.size(); i++) {
+							updateToTable.addKeyValue(keyFieldIDList.get(i), selectFromTable.getValueOf(keyFieldIDList.get(i)));
+						}
+						count = updateToTable.execute();
+						if (count != 1) {
+							commit(false, null); //roll-back//
+							return false;
+						}
+					} else {
+						insertToTable = createTableOperator("INSERT", toTable);
+						for (int i = 0; i < fieldIDList.size(); i++) {
+							insertToTable.addValue(fieldIDList.get(i), selectFromTable.getValueOf(fieldIDList.get(i)));
+						}
+						count = insertToTable.execute();
+						if (count != 1) {
+							commit(false, null); //roll-back//
+							return false;
+						}
+					}
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			commit(false, null); //roll-back//
+			return false;
+		}
+
+		return true;
 	}
 
 	org.w3c.dom.Document getDomDocument() {
@@ -2123,25 +2372,30 @@ public class Session extends Object {
 		Statement statement = null;
 		HttpPost httpPost = null;
 		String msg = "";
-		//
+		boolean isTarget = false;
+
 		if (databaseName.contains("jdbc:derby:")) {
 			try {
 				if (appServerName.equals("")) {
 					statement = connectionManualCommit.createStatement();
 				}
-				//
 				for (int i = 0; i < tableList.getLength(); i++) {
-					//
 					element = (org.w3c.dom.Element)tableList.item(i);
-					if (element.getAttribute("ID").startsWith(tableID) || tableID.equals("")) {
-						//
+					isTarget = false;
+					if (element.getAttribute("ID").equals(tableID) || tableID.equals("")) {
+						isTarget = true;
+					} else {
+						if (tableID.endsWith("*") && element.getAttribute("ID").startsWith(tableID.replace("*", ""))) {
+							isTarget = true;
+						}
+					}
+					if (isTarget) {
 						statementBuf = new StringBuffer();
 						statementBuf.append("CALL SYSCS_UTIL.SYSCS_COMPRESS_TABLE('");
 						statementBuf.append(databaseUser);
 						statementBuf.append("', '") ;
 						statementBuf.append(element.getAttribute("ID"));
 						statementBuf.append("', 1)") ;
-						//
 						//////////////////////////////////////
 						// Execute procedure by auto-commit //
 						//////////////////////////////////////
@@ -2158,7 +2412,7 @@ public class Session extends Object {
 								HttpEntity responseEntity = response.getEntity();
 								if (responseEntity == null) {
 									msg = "Compressing table " + element.getAttribute("ID") + " failed.";
-									//JOptionPane.showMessageDialog(null, msg);
+//									JOptionPane.showMessageDialog(null, msg);
 									throw new Exception(msg);
 								}
 							} finally {
@@ -2171,10 +2425,10 @@ public class Session extends Object {
 					}
 				}
 			} catch (SQLException e) {
-				//JOptionPane.showMessageDialog(null, "Compressing table " + tableID + " failed.\n" + e.getMessage());
+//				JOptionPane.showMessageDialog(null, "Compressing table " + tableID + " failed.\n" + e.getMessage());
 				throw new Exception(e.getMessage());
 			} catch (Exception e) {
-				//JOptionPane.showMessageDialog(null, "Compressing table " + tableID + " failed.\n" + e.getMessage());
+//				JOptionPane.showMessageDialog(null, "Compressing table " + tableID + " failed.\n" + e.getMessage());
 				throw new Exception(e.getMessage());
 			} finally {
 				if (appServerName.equals("")) {

@@ -43,7 +43,6 @@ import javax.script.ScriptException;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
-
 //import xeadDriver.XFTableEvaluator;
 ////import xeadDriver.XFExecutable;
 ////import xeadDriver.XFScriptable;
@@ -139,6 +138,19 @@ public class ScriptLauncher implements XFExecutable, XFScriptable {
 	public void setErrorAndCloseFunction() {
 		errorHasOccured = true;
 		closeFunction();
+	}
+
+	@Override
+	public Session getSession() {
+		return session_;
+	}
+
+	public String getUserValueOf(String dataSourceName) {
+		return session_.getFilterValue(this.getFunctionID(), dataSourceName);
+	}
+
+	public void setUserValueOf(String dataSourceName, Object value) {
+		session_.setFilterValue(this.getFunctionID(), dataSourceName, value.toString());
 	}
 
 	@Override
