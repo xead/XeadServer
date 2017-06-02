@@ -6,6 +6,8 @@
 <2017/01/08>
 ・session関数のcompressTable(...)について、テーブルIDの末尾に*を置かねばジェネリック指定できないようにした
 ・session関数として、copyTableRecords(...)、showDialogToChooseFile(...)、createExcelFileOperator(...)を追加した
+<2017/05/31>
+・session関数copyTableRecords(...)を改善した
 
 //////////////////////////////
 // XFExcelFileOperator.java //
