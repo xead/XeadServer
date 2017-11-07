@@ -39,6 +39,7 @@ import java.io.OutputStream;
 import java.util.Calendar;
 //import javax.swing.JOptionPane;
 
+
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
@@ -80,6 +81,17 @@ public class XFExcelFileOperator {
     		isError = true;
     	}
     	return isError;
+    }
+
+    public int getLastRowIndex(int indexOfSheet) {
+    	int num = 0;
+    	try {
+    		Sheet sheet = workbook_.getSheetAt(indexOfSheet);
+    		num = sheet.getLastRowNum();
+    	} catch (Exception e) {
+    		num = -1;
+    	}
+		return num;
     }
     
     public Object getValueAt(int indexOfSheet, int indexOfRow, int indexOfColumn) {

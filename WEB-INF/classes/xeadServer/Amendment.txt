@@ -8,12 +8,16 @@
 ・session関数として、copyTableRecords(...)、showDialogToChooseFile(...)、createExcelFileOperator(...)を追加した
 <2017/05/31>
 ・session関数copyTableRecords(...)を改善した
+<2017/08/23>
+・session関数createJsonObject(String text)とcreateJsonArray(String text)を改善した
 
 //////////////////////////////
 // XFExcelFileOperator.java //
 //////////////////////////////
 <2017/01/08>
 ・新規追加した
+<2017/08/23>
+・getLastRowIndex(int indexOfSheet)を追加した
 
 //////////////////////////
 // XFTableOperator.java //
